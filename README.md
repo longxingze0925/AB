@@ -15,23 +15,39 @@
 
 所有会变的东西(入口域名、出口域名、APK直链、图片)只存在数据库,入口/出口都是"读配置干活"。换任何域名 = 后台点一下,链接不变、内容不变。
 
-## 一键部署(3 步)
+## 一键部署
 
-前提:一台 Linux VPS,已装 Docker 和 Docker Compose。
+前提:一台 Linux VPS(Ubuntu/Debian/CentOS 均可)。
+
+### 方式 1:远程一键安装(推荐)
 
 ```bash
-# 1. 上传本项目到服务器,进入目录
-cd ab
+bash <(curl -fsSL https://raw.githubusercontent.com/longxingze0925/AB/main/ops/install.sh)
+```
 
-# 2. 配置环境变量(必改管理员密码、SESSION_SECRET、主站域名)
+脚本会自动:
+1. 检查并安装 Docker + Docker Compose(如未安装)
+2. 下载项目代码
+3. 下载 IP 地理库(ip2asn + 城市库,共约 36MB)
+4. 交互式配置(后台域名、管理员账号密码)
+5. 启动服务
+
+安装完成后会显示登录信息,保存在 `/opt/apk-landing/credentials.txt`。
+
+### 方式 2:手动部署
+
+```bash
+# 1. 克隆项目
+git clone https://github.com/longxingze0925/AB.git
+cd AB
+
+# 2. 配置环境变量
 cp .env.example .env
-nano .env
+nano .env  # 必改:MAIN_DOMAIN, ADMIN_PASSWORD, SESSION_SECRET
 
 # 3. 启动
 docker compose up -d --build
 ```
-
-启动后访问 `https://你的MAIN_DOMAIN` 进入后台登录(账号密码在 .env 里)。
 
 ## IP 地理库(国内外定位)
 
