@@ -169,27 +169,43 @@ check_geodata() {
   local dir="$INSTALL_DIR/geodata"
   mkdir -p "$dir"
 
-  # ip2asn：可自动下载
+  # ip2asn：运营商库(全球)
   if [[ ! -f "$dir/ip2asn-v4.tsv" ]]; then
-    log "下载 ip2asn 运营商库"
-    if curl -fsSL --max-time 60 https://iptoasn.com/data/ip2asn-v4.tsv.gz \
-        | gunzip > "$dir/ip2asn-v4.tsv" 2>/dev/null; then
-      printf 'ip2asn 下载完成。\n'
+    log "下载 IP-to-ASN 运营商库 (~6MB)"
+    if curl -fsSL --max-time 90 https://iptoasn.com/data/ip2asn-v4.tsv.gz \
+        | gunzip > "$dir/ip2asn-v4.tsv" 2>/dev/null && [[ -s "$dir/ip2asn-v4.tsv" ]]; then
+      printf '✓ 运营商库下载完成\n'
     else
       rm -f "$dir/ip2asn-v4.tsv"
-      warn "ip2asn 下载失败，运营商/分流机房识别将不可用，可稍后手动下载："
+      warn "运营商库下载失败,运营商识别将不可用。手动下载:"
       printf '  curl -L https://iptoasn.com/data/ip2asn-v4.tsv.gz | gunzip > %s/ip2asn-v4.tsv\n' "$dir"
     fi
+  else
+    printf '✓ 运营商库已存在\n'
   fi
 
-  # mmdb：需手动下载，提示即可
-  if ! find "$dir" -name '*.mmdb' 2>/dev/null | grep -q .; then
-    printf '\n'
-    warn "未找到城市库(.mmdb)，省/市识别将不可用。"
-    printf '请手动下载（免费，无需注册）：\n'
-    printf '  1. 打开 https://db-ip.com/db/download/ip-to-city-lite\n'
-    printf '  2. 下载 .mmdb.gz 文件，解压后放入 %s/\n' "$dir"
-    printf '  3. 重启服务：apk-landing → 重启服务\n\n'
+  # mmdb：城市库(全球国家+省+市)
+  if ! find "$dir" -name '*.mmdb' -size +1M 2>/dev/null | grep -q .; then
+    log "下载 DB-IP City Lite 城市库 (~30MB,约需 30-60 秒)"
+    local month year url
+    month="$(date +%Y-%m)"
+    # DB-IP 文件名格式: dbip-city-lite-2026-06.mmdb.gz
+    url="https://download.db-ip.com/free/dbip-city-lite-${month}.mmdb.gz"
+
+    if curl -fsSL --max-time 180 "$url" \
+        | gunzip > "$dir/dbip-city-lite-${month}.mmdb" 2>/dev/null \
+        && [[ -s "$dir/dbip-city-lite-${month}.mmdb" ]]; then
+      printf '✓ 城市库下载完成\n'
+    else
+      rm -f "$dir/dbip-city-lite-${month}.mmdb"
+      warn "城市库下载失败(可能本月版本未发布),省/市识别将不可用。"
+      printf '手动下载(免费,无需注册):\n'
+      printf '  1. 访问 https://db-ip.com/db/download/ip-to-city-lite\n'
+      printf '  2. 下载 .mmdb.gz,解压后放入 %s/\n' "$dir"
+      printf '  3. 重启服务生效\n'
+    fi
+  else
+    printf '✓ 城市库已存在\n'
   fi
 }
 
