@@ -168,16 +168,28 @@ preflight() {
 check_geodata() {
   local dir="$INSTALL_DIR/geodata"
   mkdir -p "$dir"
-  local has_tsv has_mmdb
-  has_tsv="$(find "$dir" -name 'ip2asn-v4.tsv' 2>/dev/null | head -1)"
-  has_mmdb="$(find "$dir" -name '*.mmdb' 2>/dev/null | head -1)"
-  if [[ -z "$has_tsv" ]]; then
-    warn "未找到 ip2asn-v4.tsv，运营商/分流识别将不可用。"
-    printf '下载命令：curl -L https://iptoasn.com/data/ip2asn-v4.tsv.gz | gunzip > %s/ip2asn-v4.tsv\n' "$dir"
+
+  # ip2asn：可自动下载
+  if [[ ! -f "$dir/ip2asn-v4.tsv" ]]; then
+    log "下载 ip2asn 运营商库"
+    if curl -fsSL --max-time 60 https://iptoasn.com/data/ip2asn-v4.tsv.gz \
+        | gunzip > "$dir/ip2asn-v4.tsv" 2>/dev/null; then
+      printf 'ip2asn 下载完成。\n'
+    else
+      rm -f "$dir/ip2asn-v4.tsv"
+      warn "ip2asn 下载失败，运营商/分流机房识别将不可用，可稍后手动下载："
+      printf '  curl -L https://iptoasn.com/data/ip2asn-v4.tsv.gz | gunzip > %s/ip2asn-v4.tsv\n' "$dir"
+    fi
   fi
-  if [[ -z "$has_mmdb" ]]; then
-    warn "未找到 .mmdb 城市库，省市识别将不可用。"
-    printf '下载地址：https://db-ip.com/db/download/ip-to-city-lite  解压后放入 %s/\n' "$dir"
+
+  # mmdb：需手动下载，提示即可
+  if ! find "$dir" -name '*.mmdb' 2>/dev/null | grep -q .; then
+    printf '\n'
+    warn "未找到城市库(.mmdb)，省/市识别将不可用。"
+    printf '请手动下载（免费，无需注册）：\n'
+    printf '  1. 打开 https://db-ip.com/db/download/ip-to-city-lite\n'
+    printf '  2. 下载 .mmdb.gz 文件，解压后放入 %s/\n' "$dir"
+    printf '  3. 重启服务：apk-landing → 重启服务\n\n'
   fi
 }
 
