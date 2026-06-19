@@ -211,6 +211,14 @@ export function classifyServerSync(headers: Headers): ServerVerdict {
     }
   }
 
+  // 静态 GET 请求强制拦截:真实浏览器导航必有 sec-fetch-mode
+  // 现代浏览器(Chrome 76+, Edge 79+, Firefox 90+)的所有导航请求都会自动带此头
+  // 缺失 = curl/wget/python-requests 等静态抓取工具
+  const secFetchMode = headers.get("sec-fetch-mode");
+  if (!secFetchMode) {
+    return { decision: "bot", reason: "缺少 sec-fetch-mode(静态抓取/旧浏览器)", headerScore: 0 };
+  }
+
   const ip = getClientIp(headers);
 
   if (isBlacklisted(ip)) {
