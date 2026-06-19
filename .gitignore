@@ -1,0 +1,10 @@
+node_modules
+.next
+.env
+data
+*.db
+*.db-*
+npm-debug.log*
+.DS_Store
+geodata/
+tsconfig.tsbuildinfo

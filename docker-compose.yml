@@ -1,0 +1,30 @@
+services:
+  app:
+    image: ${APP_IMAGE:-ghcr.io/longxingze0925/ab:latest}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - GEODATA_DIR=/app/geodata
+    volumes:
+      - app_data:/data
+      - ./geodata:/app/geodata:ro
+    expose:
+      - "3000"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  app_data:
+  caddy_data:
+  caddy_config:

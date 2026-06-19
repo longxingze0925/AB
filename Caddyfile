@@ -1,0 +1,18 @@
+# Caddy 配置:对所有域名自动签发 HTTPS 证书(on-demand TLS)
+# 这样你在后台新增任何入口/出口域名,首次访问即自动出证书,无需手动配置
+
+{
+	# 按需签发证书,但只对 app 确认过的域名签(防止被恶意域名刷证书)
+	on_demand_tls {
+		ask http://app:3000/api/tls-check
+	}
+	email admin@example.com
+}
+
+# 所有 HTTPS 请求统一反代到 app,由 app 按 Host 判断入口/出口/后台
+https:// {
+	tls {
+		on_demand
+	}
+	reverse_proxy app:3000
+}

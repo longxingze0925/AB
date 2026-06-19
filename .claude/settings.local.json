@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(npx tsc *)",
+      "Bash(python3 *)",
+      "Bash(bash -n \"C:/Users/1/Desktop/ab/ops/apkctl.sh\")",
+      "Bash(bash -n \"C:/Users/1/Desktop/ab/ops/install.sh\")",
+      "Bash(git config *)",
+      "Bash(git credential-manager *)",
+      "Bash(git credential-osxkeychain *)",
+      "Bash(git init *)",
+      "Bash(git add *)",
+      "Bash(git rm *)",
+      "Bash(git commit *)"
+    ]
+  },
+  "enabledMcpjsonServers": [
+    "figma",
+    "agentvibes"
+  ]
+}
