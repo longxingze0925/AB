@@ -6,8 +6,8 @@ WORKDIR /app
 FROM base AS deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 make g++ && rm -rf /var/lib/apt/lists/*
-COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev && npm cache clean --force
+COPY package.json package-lock.json ./
+RUN npm install
 
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
@@ -16,10 +16,11 @@ RUN npm run build
 
 FROM base AS runner
 ENV NODE_ENV=production
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
 
-# 复制运行时依赖
-COPY --from=deps /app/node_modules ./node_modules
-# 复制构建产物
+# 复制所有运行时需要的文件
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/db ./db
@@ -29,7 +30,4 @@ COPY --from=builder /app/package.json ./package.json
 RUN mkdir -p /data && chmod 755 /data
 
 EXPOSE 3000
-ENV PORT=3000
-ENV HOSTNAME=0.0.0.0
-
 CMD ["npm", "start"]
