@@ -6,8 +6,8 @@ WORKDIR /app
 FROM base AS deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 make g++ && rm -rf /var/lib/apt/lists/*
-COPY package.json ./
-RUN npm install
+COPY package.json package-lock.json* ./
+RUN npm ci --omit=dev && npm cache clean --force
 
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
@@ -16,13 +16,20 @@ RUN npm run build
 
 FROM base AS runner
 ENV NODE_ENV=production
-# standalone 产物
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
+
+# 复制运行时依赖
+COPY --from=deps /app/node_modules ./node_modules
+# 复制构建产物
+COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/db ./db
-# 原生模块随 standalone 自动包含;若缺失则补带
-COPY --from=deps /app/node_modules/better-sqlite3 ./node_modules/better-sqlite3
+COPY --from=builder /app/package.json ./package.json
+
+# 创建数据目录
+RUN mkdir -p /data && chmod 755 /data
 
 EXPOSE 3000
-CMD ["node", "server.js"]
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
+
+CMD ["npm", "start"]
