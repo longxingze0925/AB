@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { headers, cookies } from "next/headers";
 import {
   type LandingRoute,
@@ -25,23 +25,10 @@ function getHost(h: Headers): string {
   return host.split(":")[0].toLowerCase();
 }
 
-function notFoundResponse() {
-  return new Response("404 Not Found", {
-    status: 404,
-    headers: { "content-type": "text/plain; charset=utf-8" },
-  });
-}
-
 // 探针 JS（移植自 cloak-router/templates.go loadingTmpl）
-function probePage(routeId?: number) {
-  const verifyUrl = routeId ? `/api/cloak/verify?route=${routeId}` : "/api/cloak/verify";
-  return `<!doctype html>
-<html lang="zh"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>加载中…</title></head>
-<body style="font-family:sans-serif;color:#666;display:flex;height:90vh;align-items:center;justify-content:center">
-<div>正在加载，请稍候…</div>
-<script>
+function ProbePage({ routeId }: { routeId: number }) {
+  const verifyUrl = `/api/cloak/verify?route=${routeId}`;
+  const script = `
 (async function(){
   function webglVendor(){
     try{var c=document.createElement('canvas');var gl=c.getContext('webgl')||c.getContext('experimental-webgl');
@@ -74,8 +61,23 @@ function probePage(routeId?: number) {
     location.reload();
   }catch(_){location.reload();}
 })();
-</script>
-</body></html>`;
+`;
+
+  return (
+    <main
+      style={{
+        fontFamily: "sans-serif",
+        color: "#666",
+        display: "flex",
+        minHeight: "90vh",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <div>正在加载，请稍候…</div>
+      <script dangerouslySetInnerHTML={{ __html: script }} />
+    </main>
+  );
 }
 
 export default async function Page({
@@ -98,7 +100,7 @@ export default async function Page({
   const route = entryRoute || exitRoute;
 
   // 未命中启用线路时，入口/出口域名都应直接失效。
-  if (!route) return notFoundResponse();
+  if (!route) notFound();
 
   const cloakResult = await guardRouteCloak(route, h, promo);
   if (cloakResult) return cloakResult;
@@ -162,9 +164,7 @@ async function guardRouteCloak(route: LandingRoute, h: Headers, promo: string) {
   }
 
   await recordRouteVariant(route, "probe", "需 JS 探针确认", h, promo);
-  return new Response(probePage(route.id), {
-    headers: { "content-type": "text/html; charset=utf-8" },
-  });
+  return <ProbePage routeId={route.id} />;
 }
 
 async function recordRouteVariant(
