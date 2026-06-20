@@ -35,13 +35,16 @@ export function getDb(): Database.Database {
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
 
+  // 旧库先补列，再执行 schema 中依赖新列的索引创建。
+  migrateBeforeSchema(db);
+
   // 首次运行自动建表
   const schemaPath = path.join(process.cwd(), "db", "schema.sql");
   if (fs.existsSync(schemaPath)) {
     db.exec(fs.readFileSync(schemaPath, "utf8"));
   }
 
-  migrate(db);
+  migrateAfterSchema(db);
   ensureDefaults(db);
   _db = db;
   return _db;
@@ -52,11 +55,24 @@ function hasColumn(db: Database.Database, table: string, column: string): boolea
   return rows.some((r) => r.name === column);
 }
 
-function migrate(db: Database.Database) {
+function hasTable(db: Database.Database, table: string): boolean {
+  const row = db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+    .get(table);
+  return !!row;
+}
+
+function migrateBeforeSchema(db: Database.Database) {
+  if (hasTable(db, "visits") && !hasColumn(db, "visits", "route_id")) {
+    db.exec("ALTER TABLE visits ADD COLUMN route_id INTEGER");
+  }
+}
+
+function migrateAfterSchema(db: Database.Database) {
   if (!hasColumn(db, "visits", "route_id")) {
     db.exec("ALTER TABLE visits ADD COLUMN route_id INTEGER");
-    db.exec("CREATE INDEX IF NOT EXISTS idx_visits_route ON visits(route_id)");
   }
+  db.exec("CREATE INDEX IF NOT EXISTS idx_visits_route ON visits(route_id)");
 }
 
 // 写入默认设置项(只在不存在时插入)

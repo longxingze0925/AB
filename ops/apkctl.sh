@@ -104,6 +104,16 @@ wait_http() {
   return 1
 }
 
+wait_app_health() {
+  local attempts="${1:-40}" i
+  for ((i=1;i<=attempts;i++)); do
+    compose_cmd exec -T app node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" >/dev/null 2>&1 \
+      && { printf '应用 已就绪。\n'; return 0; }
+    sleep 3
+  done
+  return 1
+}
+
 fetch_source() {
   local dest="$1"
   rm -rf "$dest"; mkdir -p "$dest"
@@ -261,7 +271,7 @@ install_flow() {
   compose_cmd up -d
 
   log "等待服务就绪"
-  wait_http "http://127.0.0.1:3000/api/tls-check" "应用" 40 \
+  wait_app_health 40 \
     || warn "健康检查超时，请运行「查看日志」排查。"
 
   install_local_command
@@ -303,7 +313,7 @@ update_flow() {
   log "重启服务"
   compose_cmd up -d
 
-  wait_http "http://127.0.0.1:3000/api/tls-check" "应用" 40 \
+  wait_app_health 40 \
     || warn "健康检查超时，请查看日志。"
 
   printf '\n更新完成。\n'
@@ -385,7 +395,7 @@ restart_flow() {
   is_installed || die "$APP_NAME 尚未安装。"
   in_install_dir
   compose_cmd restart
-  wait_http "http://127.0.0.1:3000/api/tls-check" "应用" 30 \
+  wait_app_health 30 \
     || warn "重启后健康检查超时。"
 }
 
@@ -414,7 +424,7 @@ doctor_flow() {
   if is_installed; then
     printf '\n服务状态：\n'; in_install_dir; compose_cmd ps
     printf '\n健康检查：\n'
-    wait_http "http://127.0.0.1:3000/api/tls-check" "应用" 5 \
+    wait_app_health 5 \
       || printf '应用未响应。\n'
   fi
 }
