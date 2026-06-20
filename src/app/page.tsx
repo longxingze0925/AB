@@ -168,12 +168,11 @@ export default async function Page({
     }
   }
 
-  // ---- 无启用线路 / 未配置 ----
-  return (
-    <main style={{ padding: 40, textAlign: "center" }}>
-      <p>服务未就绪</p>
-    </main>
-  );
+  // ---- 无启用线路 / 未配置：入口和出口都失效 ----
+  return new Response("404 Not Found", {
+    status: 404,
+    headers: { "content-type": "text/plain; charset=utf-8" },
+  });
 }
 
 async function guardRouteCloak(route: LandingRoute, h: Headers, promo: string) {
