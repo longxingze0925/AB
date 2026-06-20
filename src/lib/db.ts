@@ -66,6 +66,18 @@ function migrateBeforeSchema(db: Database.Database) {
   if (hasTable(db, "visits") && !hasColumn(db, "visits", "route_id")) {
     db.exec("ALTER TABLE visits ADD COLUMN route_id INTEGER");
   }
+  if (hasTable(db, "visits") && !hasColumn(db, "visits", "page_variant")) {
+    db.exec("ALTER TABLE visits ADD COLUMN page_variant TEXT DEFAULT 'unknown'");
+  }
+  if (hasTable(db, "visits") && !hasColumn(db, "visits", "cloak_reason")) {
+    db.exec("ALTER TABLE visits ADD COLUMN cloak_reason TEXT DEFAULT ''");
+  }
+  if (hasTable(db, "visits") && !hasColumn(db, "visits", "ip_source")) {
+    db.exec("ALTER TABLE visits ADD COLUMN ip_source TEXT DEFAULT ''");
+  }
+  if (hasTable(db, "visits") && !hasColumn(db, "visits", "cf_ray")) {
+    db.exec("ALTER TABLE visits ADD COLUMN cf_ray TEXT DEFAULT ''");
+  }
   if (hasTable(db, "promo_codes") && !hasColumn(db, "promo_codes", "route_id")) {
     db.exec("ALTER TABLE promo_codes ADD COLUMN route_id INTEGER");
   }
@@ -74,6 +86,18 @@ function migrateBeforeSchema(db: Database.Database) {
 function migrateAfterSchema(db: Database.Database) {
   if (!hasColumn(db, "visits", "route_id")) {
     db.exec("ALTER TABLE visits ADD COLUMN route_id INTEGER");
+  }
+  if (!hasColumn(db, "visits", "page_variant")) {
+    db.exec("ALTER TABLE visits ADD COLUMN page_variant TEXT DEFAULT 'unknown'");
+  }
+  if (!hasColumn(db, "visits", "cloak_reason")) {
+    db.exec("ALTER TABLE visits ADD COLUMN cloak_reason TEXT DEFAULT ''");
+  }
+  if (!hasColumn(db, "visits", "ip_source")) {
+    db.exec("ALTER TABLE visits ADD COLUMN ip_source TEXT DEFAULT ''");
+  }
+  if (!hasColumn(db, "visits", "cf_ray")) {
+    db.exec("ALTER TABLE visits ADD COLUMN cf_ray TEXT DEFAULT ''");
   }
   db.exec("CREATE INDEX IF NOT EXISTS idx_visits_route ON visits(route_id)");
   if (!hasColumn(db, "promo_codes", "route_id")) {

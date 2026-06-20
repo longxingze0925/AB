@@ -5,10 +5,14 @@ import { useEffect, useState } from "react";
 interface Visit {
   id: number;
   route_name: string;
+  page_variant: string;
+  cloak_reason: string;
   promo_code: string;
   entry_domain: string;
   exit_domain: string;
   ip: string;
+  ip_source: string;
+  cf_ray: string;
   country: string;
   province: string;
   city: string;
@@ -69,7 +73,7 @@ export default function VisitsPage() {
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, whiteSpace: "nowrap" }}>
           <thead>
             <tr style={{ textAlign: "left", color: "#6b7280", background: "#f9fafb" }}>
-              {["时间", "线路", "推广码", "IP", "地区", "运营商", "系统", "设备", "浏览器", "屏幕", "时区", "网络", "指纹", "下载", "入口", "出口"].map((h) => (
+              {["时间", "页面", "原因", "线路", "推广码", "IP", "IP来源", "地区", "运营商", "系统", "设备", "浏览器", "屏幕", "时区", "网络", "CF Ray", "指纹", "下载", "入口", "出口"].map((h) => (
                 <th key={h} style={th}>{h}</th>
               ))}
             </tr>
@@ -78,9 +82,12 @@ export default function VisitsPage() {
             {rows.map((r) => (
               <tr key={r.id} style={{ borderTop: "1px solid #f3f4f6" }}>
                 <td style={td}>{r.created_at}</td>
+                <td style={td}>{variantLabel(r.page_variant)}</td>
+                <td style={{ ...td, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis" }} title={r.cloak_reason}>{r.cloak_reason || "-"}</td>
                 <td style={td}>{r.route_name || "-"}</td>
                 <td style={td}>{r.promo_code || "-"}</td>
                 <td style={td}>{r.ip || "-"}</td>
+                <td style={td}>{r.ip_source || "-"}</td>
                 <td style={td}>{[r.country, r.province, r.city].filter(Boolean).join("/") || "-"}</td>
                 <td style={td}>{r.isp || "-"}</td>
                 <td style={td}>{[r.os, r.os_version].filter(Boolean).join(" ") || "-"}</td>
@@ -89,6 +96,7 @@ export default function VisitsPage() {
                 <td style={td}>{r.screen || "-"}</td>
                 <td style={td}>{r.timezone || "-"}</td>
                 <td style={td}>{r.network || "-"}</td>
+                <td style={td} title={r.cf_ray}>{r.cf_ray || "-"}</td>
                 <td style={td} title={r.fingerprint}>{r.fingerprint ? r.fingerprint.slice(0, 8) : "-"}</td>
                 <td style={td}>{r.downloaded ? <span style={{ color: "#16a34a" }}>✓</span> : "-"}</td>
                 <td style={td}>{r.entry_domain || "-"}</td>
@@ -96,7 +104,7 @@ export default function VisitsPage() {
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan={16} style={{ ...td, textAlign: "center", color: "#9ca3af" }}>暂无数据</td></tr>
+              <tr><td colSpan={20} style={{ ...td, textAlign: "center", color: "#9ca3af" }}>暂无数据</td></tr>
             )}
           </tbody>
         </table>
@@ -109,6 +117,13 @@ export default function VisitsPage() {
       </div>
     </div>
   );
+}
+
+function variantLabel(value: string) {
+  if (value === "real") return <span style={{ color: "#16a34a", fontWeight: 600 }}>真</span>;
+  if (value === "fake") return <span style={{ color: "#dc2626", fontWeight: 600 }}>假</span>;
+  if (value === "probe") return <span style={{ color: "#2563eb", fontWeight: 600 }}>探针</span>;
+  return "-";
 }
 
 const th: React.CSSProperties = { padding: "10px 8px", fontWeight: 500 };

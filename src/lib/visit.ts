@@ -2,11 +2,30 @@ import { UAParser } from "ua-parser-js";
 import { getDb } from "./db";
 import { lookupGeo } from "./geo";
 
-// 从请求头尽力取真实 IP(Caddy/CDN 会带 X-Forwarded-For)
-export function getClientIp(headers: Headers): string {
+export interface ClientIpInfo {
+  ip: string;
+  source: string;
+}
+
+// 从请求头尽力取真实 IP。Cloudflare 小黄云下优先读取 CF-Connecting-IP。
+export function getClientIpInfo(headers: Headers): ClientIpInfo {
+  const cf = headers.get("cf-connecting-ip");
+  if (cf) return { ip: cf.trim(), source: "cf-connecting-ip" };
+
+  const trueClient = headers.get("true-client-ip");
+  if (trueClient) return { ip: trueClient.trim(), source: "true-client-ip" };
+
   const xff = headers.get("x-forwarded-for");
-  if (xff) return xff.split(",")[0].trim();
-  return headers.get("x-real-ip") || "";
+  if (xff) return { ip: xff.split(",")[0].trim(), source: "x-forwarded-for" };
+
+  const real = headers.get("x-real-ip");
+  if (real) return { ip: real.trim(), source: "x-real-ip" };
+
+  return { ip: "", source: "" };
+}
+
+export function getClientIp(headers: Headers): string {
+  return getClientIpInfo(headers).ip;
 }
 
 // 解析 UA → 操作系统/设备/浏览器(含微信、QQ、抖音等容器识别)
@@ -51,6 +70,8 @@ export async function getGeo(ip: string, headers: Headers) {
 export interface VisitInput {
   route_id?: number;
   promo_code: string;
+  page_variant?: "real" | "fake" | "probe" | "unknown";
+  cloak_reason?: string;
   entry_domain: string;
   exit_domain: string;
   headers: Headers;
@@ -58,20 +79,20 @@ export interface VisitInput {
 
 // 服务端首次记录访问,返回 visitId(供客户端后续回填屏幕/指纹等)
 export async function recordVisit(input: VisitInput): Promise<number> {
-  const { route_id, promo_code, entry_domain, exit_domain, headers } = input;
+  const { route_id, promo_code, page_variant, cloak_reason, entry_domain, exit_domain, headers } = input;
   const ua = headers.get("user-agent") || "";
-  const ipInfo = getClientIp(headers);
+  const ipInfo = getClientIpInfo(headers);
   const uaInfo = parseUa(ua);
-  const geo = await getGeo(ipInfo, headers);
+  const geo = await getGeo(ipInfo.ip, headers);
 
   const stmt = getDb().prepare(`
     INSERT INTO visits (
-      route_id, promo_code, entry_domain, exit_domain, ip,
+      route_id, promo_code, page_variant, cloak_reason, entry_domain, exit_domain, ip, ip_source, cf_ray,
       country, province, city, isp,
       os, os_version, device, browser, language, referer,
       is_mobile, user_agent
     ) VALUES (
-      @route_id, @promo_code, @entry_domain, @exit_domain, @ip,
+      @route_id, @promo_code, @page_variant, @cloak_reason, @entry_domain, @exit_domain, @ip, @ip_source, @cf_ray,
       @country, @province, @city, @isp,
       @os, @os_version, @device, @browser, @language, @referer,
       @is_mobile, @user_agent
@@ -81,9 +102,13 @@ export async function recordVisit(input: VisitInput): Promise<number> {
   const info = stmt.run({
     route_id: route_id || null,
     promo_code,
+    page_variant: page_variant || "unknown",
+    cloak_reason: cloak_reason || "",
     entry_domain,
     exit_domain,
-    ip: ipInfo,
+    ip: ipInfo.ip,
+    ip_source: ipInfo.source,
+    cf_ray: headers.get("cf-ray") || "",
     ...geo,
     os: uaInfo.os,
     os_version: uaInfo.os_version,

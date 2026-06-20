@@ -122,6 +122,8 @@ export default async function Page({
       visitId = await recordVisit({
         route_id: entryRoute!.id,
         promo_code: effectivePromo,
+        page_variant: "real",
+        cloak_reason: "",
         entry_domain: host,
         exit_domain: entryRoute!.exit_domain,
         headers: h,
@@ -150,16 +152,19 @@ export default async function Page({
     if (!isHuman) {
       // 已探测过判为机器 → 直接给假内容（不再发探针，防死循环）
       if (probedCookie === "0") {
+        await recordGlobalVariant("fake", "JS 探针未通过", host, currentExit || "", promo, h);
         return decoyResponse(host, promo, currentExit);
       }
 
       // 服务端层快速初判（同步：UA + ASN；异步加 PTR，有超时容忍）
       const verdict = await classifyServerAsync(h);
       if (verdict.decision === "bot") {
+        await recordGlobalVariant("fake", verdict.reason, host, currentExit || "", promo, h);
         return decoyResponse(host, promo, currentExit);
       }
 
       // 需要 JS 探针确认 → 返回加载页
+      await recordGlobalVariant("probe", "需 JS 探针确认", host, currentExit || "", promo, h);
       return new Response(probePage(), {
         headers: { "content-type": "text/html; charset=utf-8" },
       });
@@ -192,6 +197,8 @@ export default async function Page({
     try {
       visitId = await recordVisit({
         promo_code: promo,
+        page_variant: "real",
+        cloak_reason: "",
         entry_domain: host,
         exit_domain: currentExit,
         headers: h,
@@ -225,17 +232,65 @@ async function guardRouteCloak(route: LandingRoute, h: Headers, promo: string) {
   if (isHuman) return null;
 
   if (probedCookie === "0") {
+    await recordRouteVariant(route, "fake", "JS 探针未通过", h, promo);
     return routeDecoyResponse(route, promo);
   }
 
   const verdict = await classifyServerAsync(h);
   if (verdict.decision === "bot") {
+    await recordRouteVariant(route, "fake", verdict.reason, h, promo);
     return routeDecoyResponse(route, promo);
   }
 
+  await recordRouteVariant(route, "probe", "需 JS 探针确认", h, promo);
   return new Response(probePage(route.id), {
     headers: { "content-type": "text/html; charset=utf-8" },
   });
+}
+
+async function recordRouteVariant(
+  route: LandingRoute,
+  pageVariant: "fake" | "probe",
+  reason: string,
+  h: Headers,
+  promo: string
+) {
+  try {
+    const promoRow = promo ? getPromoForRoute(route.id, promo) : null;
+    await recordVisit({
+      route_id: route.id,
+      promo_code: promoRow ? promoRow.code : "",
+      page_variant: pageVariant,
+      cloak_reason: reason,
+      entry_domain: route.entry_domain,
+      exit_domain: route.exit_domain,
+      headers: h,
+    });
+  } catch {
+    // 记录失败不影响分流响应
+  }
+}
+
+async function recordGlobalVariant(
+  pageVariant: "fake" | "probe",
+  reason: string,
+  entryDomain: string,
+  exitDomain: string,
+  promo: string,
+  h: Headers
+) {
+  try {
+    await recordVisit({
+      promo_code: promo,
+      page_variant: pageVariant,
+      cloak_reason: reason,
+      entry_domain: entryDomain,
+      exit_domain: exitDomain,
+      headers: h,
+    });
+  } catch {
+    // 记录失败不影响分流响应
+  }
 }
 
 function routeDecoyResponse(route: LandingRoute, promo: string) {

@@ -42,9 +42,13 @@ CREATE TABLE IF NOT EXISTS visits (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   route_id      INTEGER,                -- 命中的线路 ID
   promo_code    TEXT,                   -- 推广码
+  page_variant  TEXT DEFAULT 'unknown', -- real/fake/probe/unknown
+  cloak_reason  TEXT DEFAULT '',        -- 分流原因
   entry_domain  TEXT,                   -- 命中的入口域名
   exit_domain   TEXT,                   -- 跳转到的出口域名
   ip            TEXT,
+  ip_source     TEXT DEFAULT '',        -- cf-connecting-ip/x-forwarded-for/x-real-ip
+  cf_ray        TEXT DEFAULT '',        -- Cloudflare Ray ID
   country       TEXT,
   province      TEXT,
   city          TEXT,
