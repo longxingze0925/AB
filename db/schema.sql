@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS exit_domains (
 -- 推广码 / 推广位:区分流量来源(分站、渠道)
 CREATE TABLE IF NOT EXISTS promo_codes (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  route_id   INTEGER,                    -- 归属线路；空表示旧全局推广码
   code       TEXT NOT NULL UNIQUE,     -- 如 A1B2
   name       TEXT,                      -- 渠道/分站名称
   apk_url    TEXT,                      -- 可选:该推广码专属 APK 直链(空则用全局)
@@ -68,6 +69,7 @@ CREATE INDEX IF NOT EXISTS idx_visits_promo   ON visits(promo_code);
 CREATE INDEX IF NOT EXISTS idx_visits_created ON visits(created_at);
 CREATE INDEX IF NOT EXISTS idx_visits_fp      ON visits(fingerprint);
 CREATE INDEX IF NOT EXISTS idx_visits_route   ON visits(route_id);
+CREATE INDEX IF NOT EXISTS idx_promo_codes_route ON promo_codes(route_id);
 
 -- 线路配置：一条线路 = 入口域名 + 出口域名 + 落地页 + 下载链接 + 分流设置
 CREATE TABLE IF NOT EXISTS landing_routes (

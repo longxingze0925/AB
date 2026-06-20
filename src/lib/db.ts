@@ -66,6 +66,9 @@ function migrateBeforeSchema(db: Database.Database) {
   if (hasTable(db, "visits") && !hasColumn(db, "visits", "route_id")) {
     db.exec("ALTER TABLE visits ADD COLUMN route_id INTEGER");
   }
+  if (hasTable(db, "promo_codes") && !hasColumn(db, "promo_codes", "route_id")) {
+    db.exec("ALTER TABLE promo_codes ADD COLUMN route_id INTEGER");
+  }
 }
 
 function migrateAfterSchema(db: Database.Database) {
@@ -73,6 +76,10 @@ function migrateAfterSchema(db: Database.Database) {
     db.exec("ALTER TABLE visits ADD COLUMN route_id INTEGER");
   }
   db.exec("CREATE INDEX IF NOT EXISTS idx_visits_route ON visits(route_id)");
+  if (!hasColumn(db, "promo_codes", "route_id")) {
+    db.exec("ALTER TABLE promo_codes ADD COLUMN route_id INTEGER");
+  }
+  db.exec("CREATE INDEX IF NOT EXISTS idx_promo_codes_route ON promo_codes(route_id)");
 }
 
 // 写入默认设置项(只在不存在时插入)
@@ -167,4 +174,23 @@ export function isRouteDomain(domain: string): boolean {
       "SELECT 1 FROM landing_routes WHERE enabled = 1 AND (entry_domain = ? OR exit_domain = ?) LIMIT 1"
     )
     .get(domain, domain);
+}
+
+export interface PromoCode {
+  id: number;
+  route_id: number | null;
+  code: string;
+  name: string;
+  apk_url: string;
+  enabled: number;
+  created_at: string;
+}
+
+export function getPromoForRoute(routeId: number, code: string): PromoCode | null {
+  const promo = String(code || "").trim();
+  if (!promo) return null;
+  const row = getDb()
+    .prepare("SELECT * FROM promo_codes WHERE route_id = ? AND code = ? AND enabled = 1 LIMIT 1")
+    .get(routeId, promo) as PromoCode | undefined;
+  return row || null;
 }

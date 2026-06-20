@@ -9,6 +9,7 @@ import {
   getSetting,
   getRouteByEntry,
   getRouteByExit,
+  getPromoForRoute,
 } from "@/lib/db";
 import { recordVisit, getClientIp } from "@/lib/visit";
 import ExitLanding from "@/components/ExitLanding";
@@ -101,22 +102,26 @@ export default async function Page({
     if (cloakResult) return cloakResult;
 
     if (exitRoute) {
+      const promoRow = promo ? getPromoForRoute(exitRoute.id, promo) : null;
       return (
         <ExitLanding
-          apkUrl={exitRoute.apk_url}
+          apkUrl={promoRow?.apk_url || exitRoute.apk_url}
           imageUrl={normalizeUploadImagePath(exitRoute.image_path)}
           title={exitRoute.title || "下载"}
           autoDownload={exitRoute.auto_download === 1}
-          promo={promo}
+          promo={promoRow ? promoRow.code : promo}
         />
       );
     }
+
+    const promoRow = promo ? getPromoForRoute(entryRoute!.id, promo) : null;
+    const effectivePromo = promo && promoRow ? promoRow.code : "";
 
     let visitId = 0;
     try {
       visitId = await recordVisit({
         route_id: entryRoute!.id,
-        promo_code: promo,
+        promo_code: effectivePromo,
         entry_domain: host,
         exit_domain: entryRoute!.exit_domain,
         headers: h,
@@ -125,7 +130,7 @@ export default async function Page({
       // 记录失败不阻塞跳转
     }
     const target = new URL(`https://${entryRoute!.exit_domain}/`);
-    if (promo) target.searchParams.set("c", promo);
+    if (effectivePromo) target.searchParams.set("c", effectivePromo);
     if (visitId) target.searchParams.set("v", String(visitId));
     redirect(target.toString());
   }
