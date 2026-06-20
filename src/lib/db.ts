@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
+import { normalizeUploadImagePath } from "./uploads";
 
 export interface LandingRoute {
   id: number;
@@ -46,6 +47,7 @@ export function getDb(): Database.Database {
 
   migrateAfterSchema(db);
   ensureDefaults(db);
+  ensureDefaultRouteFromLegacy(db);
   _db = db;
   return _db;
 }
@@ -129,6 +131,53 @@ function ensureDefaults(db: Database.Database) {
     }
   });
   tx();
+}
+
+function ensureDefaultRouteFromLegacy(db: Database.Database) {
+  const routeCount = (db.prepare("SELECT COUNT(*) AS n FROM landing_routes").get() as { n: number }).n;
+  if (routeCount > 0) return;
+
+  const entry = db
+    .prepare("SELECT domain FROM entry_domains WHERE is_current = 1 ORDER BY id DESC LIMIT 1")
+    .get() as { domain: string } | undefined;
+  const exit = db
+    .prepare("SELECT domain FROM exit_domains WHERE is_current = 1 ORDER BY id DESC LIMIT 1")
+    .get() as { domain: string } | undefined;
+
+  if (!entry?.domain || !exit?.domain) return;
+
+  const setting = (key: string, fallback = "") => {
+    const row = db.prepare("SELECT value FROM settings WHERE key = ?").get(key) as { value: string } | undefined;
+    return row?.value || fallback;
+  };
+
+  db.prepare(
+    `
+    INSERT OR IGNORE INTO landing_routes (
+      name, entry_domain, exit_domain, title, image_path, apk_url, auto_download,
+      cloak_enabled, cloak_threshold, cloak_token_hours,
+      cloak_decoy_title, cloak_decoy_image_path, cloak_decoy_apk_url, enabled
+    ) VALUES (
+      @name, @entry_domain, @exit_domain, @title, @image_path, @apk_url, @auto_download,
+      @cloak_enabled, @cloak_threshold, @cloak_token_hours,
+      @cloak_decoy_title, @cloak_decoy_image_path, @cloak_decoy_apk_url, 1
+    )
+  `
+  ).run({
+    name: "默认线路",
+    entry_domain: entry.domain,
+    exit_domain: exit.domain,
+    title: setting("title", "下载"),
+    image_path: normalizeUploadImagePath(setting("image_url")),
+    apk_url: setting("apk_url"),
+    auto_download: Number(setting("auto_download", "1")),
+    cloak_enabled: Number(setting("cloak_enabled", "0")),
+    cloak_threshold: Number(setting("cloak_threshold", "8")),
+    cloak_token_hours: Number(setting("cloak_token_hours", "6")),
+    cloak_decoy_title: setting("cloak_decoy_title", "下载"),
+    cloak_decoy_image_path: normalizeUploadImagePath(setting("cloak_decoy_image_url")),
+    cloak_decoy_apk_url: setting("cloak_decoy_apk_url"),
+  });
 }
 
 // ---- 设置读写 ----

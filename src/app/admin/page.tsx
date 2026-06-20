@@ -27,7 +27,10 @@ export default function Overview() {
       </div>
 
       <div style={{ background: "#fff", padding: 20, borderRadius: 10, border: "1px solid #e5e7eb" }}>
-        <h2 style={{ fontSize: 16, marginTop: 0 }}>旧版全局配置</h2>
+        <h2 style={{ fontSize: 16, marginTop: 0 }}>兼容旧配置</h2>
+        <p style={{ color: "#6b7280", fontSize: 13, marginTop: 0 }}>
+          若旧版本已设置入口/出口，系统会自动生成一条默认线路；后续请在线路管理里维护。
+        </p>
         <Row label="当前入口域名" value={entry || "未设置"} ok={!!entry} />
         <Row label="当前出口域名" value={exit || "未设置"} ok={!!exit} />
         <Row label="APK 下载直链" value={apk || "未设置"} ok={!!apk} />
