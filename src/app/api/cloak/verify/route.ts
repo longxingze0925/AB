@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headerScore } from "@/lib/cloak";
 import { issueHumanToken, HUMAN_COOKIE, PROBED_COOKIE } from "@/lib/token";
-import { getCloakThreshold, getCloakTokenHours } from "@/lib/cloak";
+import { getCloakThreshold, getCloakTokenHours, routeCloakThreshold, routeCloakTokenHours } from "@/lib/cloak";
 import { getClientIp } from "@/lib/visit";
+import { getRouteById } from "@/lib/db";
 
 export const runtime = "nodejs";
 
@@ -71,20 +72,24 @@ export async function POST(req: NextRequest) {
     p,
     req.headers.get("accept-language") || ""
   );
-  const threshold = getCloakThreshold();
+  const routeId = Number(req.nextUrl.searchParams.get("route") || 0);
+  const route = routeId > 0 ? getRouteById(routeId) : null;
+  const threshold = route ? routeCloakThreshold(route) : getCloakThreshold();
   const human = !hardBot && hScore + pScore >= threshold;
 
   const ip = getClientIp(req.headers);
   const res = NextResponse.json({ human });
+  const tokenHours = route ? routeCloakTokenHours(route) : getCloakTokenHours();
+  const scope = route ? `route:${route.id}` : "global";
 
   if (human) {
-    const token = issueHumanToken(ip, getCloakTokenHours());
+    const token = issueHumanToken(ip, tokenHours, scope);
     res.cookies.set(HUMAN_COOKIE, token, {
       httpOnly: true,
       secure: true,
       sameSite: "strict",
       path: "/",
-      maxAge: getCloakTokenHours() * 3600,
+      maxAge: tokenHours * 3600,
     });
   } else {
     res.cookies.set(PROBED_COOKIE, "0", {

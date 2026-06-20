@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSetting, setSetting } from "@/lib/db";
 import { requireAuth } from "@/lib/guard";
+import { normalizeUploadImagePath } from "@/lib/uploads";
 
 export const runtime = "nodejs";
 
@@ -26,7 +27,9 @@ export async function POST(req: NextRequest) {
   if (deny) return deny;
   const body = await req.json();
   for (const k of KEYS) {
-    if (typeof body[k] === "string") setSetting(k, body[k]);
+    if (typeof body[k] === "string") {
+      setSetting(k, k === "cloak_decoy_image_url" ? normalizeUploadImagePath(body[k]) : body[k]);
+    }
   }
   return NextResponse.json({ ok: true });
 }

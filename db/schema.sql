@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS promo_codes (
 -- 访问记录:每个打开链接的人一行
 CREATE TABLE IF NOT EXISTS visits (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  route_id      INTEGER,                -- 命中的线路 ID
   promo_code    TEXT,                   -- 推广码
   entry_domain  TEXT,                   -- 命中的入口域名
   exit_domain   TEXT,                   -- 跳转到的出口域名
@@ -66,6 +67,30 @@ CREATE TABLE IF NOT EXISTS visits (
 CREATE INDEX IF NOT EXISTS idx_visits_promo   ON visits(promo_code);
 CREATE INDEX IF NOT EXISTS idx_visits_created ON visits(created_at);
 CREATE INDEX IF NOT EXISTS idx_visits_fp      ON visits(fingerprint);
+CREATE INDEX IF NOT EXISTS idx_visits_route   ON visits(route_id);
+
+-- 线路配置：一条线路 = 入口域名 + 出口域名 + 落地页 + 下载链接 + 分流设置
+CREATE TABLE IF NOT EXISTS landing_routes (
+  id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+  name                   TEXT NOT NULL DEFAULT '',
+  entry_domain           TEXT NOT NULL UNIQUE,
+  exit_domain            TEXT NOT NULL UNIQUE,
+  title                  TEXT NOT NULL DEFAULT '下载',
+  image_path             TEXT NOT NULL DEFAULT '', -- 仅支持本地上传路径，如 /uploads/xxx.webp
+  apk_url                TEXT NOT NULL DEFAULT '',
+  auto_download          INTEGER NOT NULL DEFAULT 1,
+  cloak_enabled          INTEGER NOT NULL DEFAULT 0,
+  cloak_threshold        INTEGER NOT NULL DEFAULT 8,
+  cloak_token_hours      INTEGER NOT NULL DEFAULT 6,
+  cloak_decoy_title      TEXT NOT NULL DEFAULT '下载',
+  cloak_decoy_image_path TEXT NOT NULL DEFAULT '',
+  cloak_decoy_apk_url    TEXT NOT NULL DEFAULT '',
+  enabled                INTEGER NOT NULL DEFAULT 1,
+  created_at             TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+  updated_at             TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_landing_routes_entry ON landing_routes(entry_domain);
+CREATE INDEX IF NOT EXISTS idx_landing_routes_exit  ON landing_routes(exit_domain);
 
 -- 分流(cloak)配置：假页面内容 + 判定参数存入 settings 表，键名以 cloak_ 开头
 -- cloak_enabled        : "1"=开启分流, "0"=关闭(所有流量走真实页面)

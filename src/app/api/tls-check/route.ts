@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isEntryDomain, isExitDomain } from "@/lib/db";
+import { isEntryDomain, isExitDomain, isRouteDomain } from "@/lib/db";
 
 export const runtime = "nodejs";
 
@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
 
   if (!domain) return new NextResponse("no domain", { status: 400 });
 
-  const allowed = domain === main || isEntryDomain(domain) || isExitDomain(domain);
+  const allowed = domain === main || isRouteDomain(domain) || isEntryDomain(domain) || isExitDomain(domain);
 
   return allowed ? new NextResponse("ok", { status: 200 }) : new NextResponse("not allowed", { status: 403 });
 }

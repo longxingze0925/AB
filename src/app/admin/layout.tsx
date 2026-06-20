@@ -29,6 +29,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <div style={{ padding: "0 20px 20px", fontWeight: 700, fontSize: 16 }}>管理后台</div>
         <nav style={{ display: "flex", flexDirection: "column" }}>
           <NavLink href="/admin" label="数据总览" />
+          <NavLink href="/admin/routes" label="线路管理" />
           <NavLink href="/admin/visits" label="访问记录" />
           <NavLink href="/admin/domains" label="域名管理" />
           <NavLink href="/admin/promos" label="推广码" />

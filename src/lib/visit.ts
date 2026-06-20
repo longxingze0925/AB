@@ -49,6 +49,7 @@ export async function getGeo(ip: string, headers: Headers) {
 }
 
 export interface VisitInput {
+  route_id?: number;
   promo_code: string;
   entry_domain: string;
   exit_domain: string;
@@ -57,7 +58,7 @@ export interface VisitInput {
 
 // 服务端首次记录访问,返回 visitId(供客户端后续回填屏幕/指纹等)
 export async function recordVisit(input: VisitInput): Promise<number> {
-  const { promo_code, entry_domain, exit_domain, headers } = input;
+  const { route_id, promo_code, entry_domain, exit_domain, headers } = input;
   const ua = headers.get("user-agent") || "";
   const ipInfo = getClientIp(headers);
   const uaInfo = parseUa(ua);
@@ -65,12 +66,12 @@ export async function recordVisit(input: VisitInput): Promise<number> {
 
   const stmt = getDb().prepare(`
     INSERT INTO visits (
-      promo_code, entry_domain, exit_domain, ip,
+      route_id, promo_code, entry_domain, exit_domain, ip,
       country, province, city, isp,
       os, os_version, device, browser, language, referer,
       is_mobile, user_agent
     ) VALUES (
-      @promo_code, @entry_domain, @exit_domain, @ip,
+      @route_id, @promo_code, @entry_domain, @exit_domain, @ip,
       @country, @province, @city, @isp,
       @os, @os_version, @device, @browser, @language, @referer,
       @is_mobile, @user_agent
@@ -78,6 +79,7 @@ export async function recordVisit(input: VisitInput): Promise<number> {
   `);
 
   const info = stmt.run({
+    route_id: route_id || null,
     promo_code,
     entry_domain,
     exit_domain,

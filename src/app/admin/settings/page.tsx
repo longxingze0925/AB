@@ -32,6 +32,14 @@ export default function SettingsPage() {
     setS((prev) => ({ ...prev, [k]: v }));
   }
 
+  async function uploadImage(file: File) {
+    const body = new FormData();
+    body.append("file", file);
+    const res = await fetch("/api/admin/upload", { method: "POST", body });
+    const d = await res.json();
+    if (d.ok) set("image_url", d.path);
+  }
+
   return (
     <div>
       <h1 style={{ fontSize: 22, marginTop: 0 }}>APK / 页面设置</h1>
@@ -40,7 +48,7 @@ export default function SettingsPage() {
           <input value={s.apk_url} onChange={(e) => set("apk_url", e.target.value)} style={inp} placeholder="https://.../app.apk" />
         </Field>
         <Field label="出口页展示图片(可选)">
-          <input value={s.image_url} onChange={(e) => set("image_url", e.target.value)} style={inp} placeholder="https://.../img.jpg" />
+          <ImageUpload value={s.image_url} onPick={uploadImage} onClear={() => set("image_url", "")} />
         </Field>
         <Field label="出口页标题">
           <input value={s.title} onChange={(e) => set("title", e.target.value)} style={inp} placeholder="下载" />
@@ -78,6 +86,35 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div style={{ marginBottom: 16 }}>
       <label style={{ display: "block", fontSize: 13, color: "#374151", marginBottom: 6 }}>{label}</label>
       {children}
+    </div>
+  );
+}
+
+function ImageUpload({
+  value,
+  onPick,
+  onClear,
+}: {
+  value: string;
+  onPick: (file: File) => void;
+  onClear: () => void;
+}) {
+  return (
+    <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+      {value ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={value} alt="预览" style={{ width: 88, height: 88, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+      ) : null}
+      <input
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) onPick(file);
+          e.currentTarget.value = "";
+        }}
+      />
+      {value && <button onClick={onClear} style={{ padding: "6px 12px", background: "#f3f4f6", border: "1px solid #d1d5db", borderRadius: 6, cursor: "pointer" }}>清除</button>}
     </div>
   );
 }

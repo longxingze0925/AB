@@ -9,6 +9,7 @@ export default function Overview() {
   const totalDownloads = (db.prepare("SELECT COUNT(*) AS n FROM visits WHERE downloaded = 1").get() as { n: number }).n;
   const uniqueDevices = (db.prepare("SELECT COUNT(DISTINCT fingerprint) AS n FROM visits WHERE fingerprint != ''").get() as { n: number }).n;
   const today = (db.prepare("SELECT COUNT(*) AS n FROM visits WHERE date(created_at) = date('now','localtime')").get() as { n: number }).n;
+  const routeCount = (db.prepare("SELECT COUNT(*) AS n FROM landing_routes").get() as { n: number }).n;
 
   const entry = getCurrentEntry();
   const exit = getCurrentExit();
@@ -17,15 +18,16 @@ export default function Overview() {
   return (
     <div>
       <h1 style={{ fontSize: 22, marginTop: 0 }}>数据总览</h1>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16, marginBottom: 24 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 16, marginBottom: 24 }}>
         <Card title="总访问" value={totalVisits} />
         <Card title="今日访问" value={today} />
         <Card title="触发下载" value={totalDownloads} />
         <Card title="独立设备" value={uniqueDevices} />
+        <Card title="线路数量" value={routeCount} />
       </div>
 
       <div style={{ background: "#fff", padding: 20, borderRadius: 10, border: "1px solid #e5e7eb" }}>
-        <h2 style={{ fontSize: 16, marginTop: 0 }}>当前线路</h2>
+        <h2 style={{ fontSize: 16, marginTop: 0 }}>旧版全局配置</h2>
         <Row label="当前入口域名" value={entry || "未设置"} ok={!!entry} />
         <Row label="当前出口域名" value={exit || "未设置"} ok={!!exit} />
         <Row label="APK 下载直链" value={apk || "未设置"} ok={!!apk} />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 
 interface BlacklistRow {
   id: number;
@@ -88,6 +88,15 @@ export default function CloakPage() {
     setS((prev) => ({ ...prev, [k]: v }));
   }
 
+  async function uploadDecoyImage(file: File) {
+    const body = new FormData();
+    body.append("file", file);
+    const res = await fetch("/api/admin/upload", { method: "POST", body });
+    const d = await res.json();
+    if (d.ok) set("cloak_decoy_image_url", d.path);
+    else setBlError(d.error || "上传失败");
+  }
+
   if (loading) return <p>加载中…</p>;
 
   return (
@@ -163,18 +172,17 @@ export default function CloakPage() {
             placeholder="https://example.com/fake.apk"
           />
         </label>
-        <label style={rowStyle}>
+        <div style={rowStyle}>
           <span style={labelStyle}>
-            假图片链接
+            假页面图片
             <small style={hint}>留空则不显示图片</small>
           </span>
-          <input
+          <ImageUpload
             value={s.cloak_decoy_image_url}
-            onChange={(e) => set("cloak_decoy_image_url", e.target.value)}
-            style={inputStyle}
-            placeholder="https://example.com/fake.jpg"
+            onPick={uploadDecoyImage}
+            onClear={() => set("cloak_decoy_image_url", "")}
           />
-        </label>
+        </div>
       </Section>
 
       <div style={{ marginTop: 24 }}>
@@ -280,6 +288,35 @@ function Section({ title, children }: { title: string; children: React.ReactNode
         {title}
       </h2>
       {children}
+    </div>
+  );
+}
+
+function ImageUpload({
+  value,
+  onPick,
+  onClear,
+}: {
+  value: string;
+  onPick: (file: File) => void;
+  onClear: () => void;
+}) {
+  return (
+    <div style={{ flex: 1, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+      {value ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={value} alt="预览" style={{ width: 88, height: 88, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+      ) : null}
+      <input
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) onPick(file);
+          e.currentTarget.value = "";
+        }}
+      />
+      {value && <button onClick={onClear} style={{ padding: "6px 12px", background: "#f3f4f6", border: "1px solid #d1d5db", borderRadius: 6, cursor: "pointer" }}>清除</button>}
     </div>
   );
 }

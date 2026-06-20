@@ -2,6 +2,26 @@ import Database from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
 
+export interface LandingRoute {
+  id: number;
+  name: string;
+  entry_domain: string;
+  exit_domain: string;
+  title: string;
+  image_path: string;
+  apk_url: string;
+  auto_download: number;
+  cloak_enabled: number;
+  cloak_threshold: number;
+  cloak_token_hours: number;
+  cloak_decoy_title: string;
+  cloak_decoy_image_path: string;
+  cloak_decoy_apk_url: string;
+  enabled: number;
+  created_at: string;
+  updated_at: string;
+}
+
 // 单例数据库连接,避免热重载时重复打开
 let _db: Database.Database | null = null;
 
@@ -21,9 +41,22 @@ export function getDb(): Database.Database {
     db.exec(fs.readFileSync(schemaPath, "utf8"));
   }
 
+  migrate(db);
   ensureDefaults(db);
   _db = db;
   return _db;
+}
+
+function hasColumn(db: Database.Database, table: string, column: string): boolean {
+  const rows = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  return rows.some((r) => r.name === column);
+}
+
+function migrate(db: Database.Database) {
+  if (!hasColumn(db, "visits", "route_id")) {
+    db.exec("ALTER TABLE visits ADD COLUMN route_id INTEGER");
+    db.exec("CREATE INDEX IF NOT EXISTS idx_visits_route ON visits(route_id)");
+  }
 }
 
 // 写入默认设置项(只在不存在时插入)
@@ -88,4 +121,34 @@ export function isEntryDomain(domain: string): boolean {
 // 判断某域名是否属于出口池
 export function isExitDomain(domain: string): boolean {
   return !!getDb().prepare("SELECT 1 FROM exit_domains WHERE domain = ?").get(domain);
+}
+
+// ---- 线路配置 ----
+export function getRouteByEntry(domain: string): LandingRoute | null {
+  const row = getDb()
+    .prepare("SELECT * FROM landing_routes WHERE entry_domain = ? AND enabled = 1 LIMIT 1")
+    .get(domain) as LandingRoute | undefined;
+  return row || null;
+}
+
+export function getRouteByExit(domain: string): LandingRoute | null {
+  const row = getDb()
+    .prepare("SELECT * FROM landing_routes WHERE exit_domain = ? AND enabled = 1 LIMIT 1")
+    .get(domain) as LandingRoute | undefined;
+  return row || null;
+}
+
+export function getRouteById(id: number): LandingRoute | null {
+  const row = getDb()
+    .prepare("SELECT * FROM landing_routes WHERE id = ? LIMIT 1")
+    .get(id) as LandingRoute | undefined;
+  return row || null;
+}
+
+export function isRouteDomain(domain: string): boolean {
+  return !!getDb()
+    .prepare(
+      "SELECT 1 FROM landing_routes WHERE enabled = 1 AND (entry_domain = ? OR exit_domain = ?) LIMIT 1"
+    )
+    .get(domain, domain);
 }

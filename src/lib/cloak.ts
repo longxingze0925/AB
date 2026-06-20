@@ -1,6 +1,7 @@
 import dns from "node:dns/promises";
-import { getDb, getSetting } from "./db";
+import { getDb, getSetting, LandingRoute } from "./db";
 import { getClientIp } from "./visit";
+import { normalizeUploadImagePath } from "./uploads";
 
 // ── 已知爬虫/脚本 UA 关键词（移植自 cloak-router/detect.go）──────────────
 const KNOWN_BOTS = [
@@ -265,7 +266,27 @@ export function getCloakTokenHours(): number {
 export function getDecoyConfig() {
   return {
     apkUrl: getSetting("cloak_decoy_apk_url") || "",
-    imageUrl: getSetting("cloak_decoy_image_url") || "",
+    imageUrl: normalizeUploadImagePath(getSetting("cloak_decoy_image_url")),
     title: getSetting("cloak_decoy_title") || "下载",
+  };
+}
+
+export function routeCloakEnabled(route: LandingRoute): boolean {
+  return route.cloak_enabled === 1;
+}
+
+export function routeCloakThreshold(route: LandingRoute): number {
+  return Number(route.cloak_threshold || 8);
+}
+
+export function routeCloakTokenHours(route: LandingRoute): number {
+  return Number(route.cloak_token_hours || 6);
+}
+
+export function routeDecoyConfig(route: LandingRoute) {
+  return {
+    apkUrl: route.cloak_decoy_apk_url || "",
+    imageUrl: normalizeUploadImagePath(route.cloak_decoy_image_path),
+    title: route.cloak_decoy_title || "下载",
   };
 }

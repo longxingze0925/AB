@@ -16,12 +16,18 @@ export async function GET(req: NextRequest) {
   const offset = (page - 1) * size;
 
   const db = getDb();
-  const where = promo ? "WHERE promo_code = ?" : "";
+  const where = promo ? "WHERE v.promo_code = ?" : "";
   const args = promo ? [promo] : [];
 
-  const total = (db.prepare(`SELECT COUNT(*) AS n FROM visits ${where}`).get(...args) as { n: number }).n;
+  const total = (db.prepare(`SELECT COUNT(*) AS n FROM visits v ${where}`).get(...args) as { n: number }).n;
   const rows = db
-    .prepare(`SELECT * FROM visits ${where} ORDER BY id DESC LIMIT ? OFFSET ?`)
+    .prepare(
+      `SELECT v.*, r.name AS route_name
+       FROM visits v
+       LEFT JOIN landing_routes r ON r.id = v.route_id
+       ${where}
+       ORDER BY v.id DESC LIMIT ? OFFSET ?`
+    )
     .all(...args, size, offset);
 
   return NextResponse.json({ ok: true, rows, total, page, size });
