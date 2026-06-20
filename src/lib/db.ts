@@ -134,8 +134,22 @@ function ensureDefaults(db: Database.Database) {
 }
 
 function ensureDefaultRouteFromLegacy(db: Database.Database) {
+  const flag = db.prepare("SELECT value FROM settings WHERE key = ?").get("legacy_routes_migrated") as
+    | { value: string }
+    | undefined;
+  if (flag?.value === "1") return;
+
+  const markMigrated = () => {
+    db.prepare(
+      "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+    ).run("legacy_routes_migrated", "1");
+  };
+
   const routeCount = (db.prepare("SELECT COUNT(*) AS n FROM landing_routes").get() as { n: number }).n;
-  if (routeCount > 0) return;
+  if (routeCount > 0) {
+    markMigrated();
+    return;
+  }
 
   const entry = db
     .prepare("SELECT domain FROM entry_domains WHERE is_current = 1 ORDER BY id DESC LIMIT 1")
@@ -151,7 +165,7 @@ function ensureDefaultRouteFromLegacy(db: Database.Database) {
     return row?.value || fallback;
   };
 
-  db.prepare(
+  const result = db.prepare(
     `
     INSERT OR IGNORE INTO landing_routes (
       name, entry_domain, exit_domain, title, image_path, apk_url, auto_download,
@@ -178,6 +192,7 @@ function ensureDefaultRouteFromLegacy(db: Database.Database) {
     cloak_decoy_image_path: normalizeUploadImagePath(setting("cloak_decoy_image_url")),
     cloak_decoy_apk_url: setting("cloak_decoy_apk_url"),
   });
+  if (result.changes > 0) markMigrated();
 }
 
 // ---- 设置读写 ----

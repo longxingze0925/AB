@@ -1,9 +1,7 @@
 import { redirect } from "next/navigation";
 import { headers, cookies } from "next/headers";
 import {
-  LandingRoute,
-  getCurrentExit,
-  isExitDomain,
+  type LandingRoute,
   getRouteByEntry,
   getRouteByExit,
   getPromoForRoute,
@@ -11,9 +9,7 @@ import {
 import { recordVisit, getClientIp } from "@/lib/visit";
 import ExitLanding from "@/components/ExitLanding";
 import {
-  isCloakEnabled,
   classifyServerAsync,
-  getDecoyConfig,
   routeCloakEnabled,
   routeDecoyConfig,
 } from "@/lib/cloak";
@@ -27,6 +23,13 @@ export const runtime = "nodejs";
 function getHost(h: Headers): string {
   const host = h.get("host") || "";
   return host.split(":")[0].toLowerCase();
+}
+
+function notFoundResponse() {
+  return new Response("404 Not Found", {
+    status: 404,
+    headers: { "content-type": "text/plain; charset=utf-8" },
+  });
 }
 
 // 探针 JS（移植自 cloak-router/templates.go loadingTmpl）
@@ -90,89 +93,50 @@ export default async function Page({
     redirect("/admin");
   }
 
-  const legacyExit = getCurrentExit();
   const entryRoute = getRouteByEntry(host);
   const exitRoute = getRouteByExit(host);
   const route = entryRoute || exitRoute;
 
-  if (route) {
-    const cloakResult = await guardRouteCloak(route, h, promo);
-    if (cloakResult) return cloakResult;
+  // 未命中启用线路时，入口/出口域名都应直接失效。
+  if (!route) return notFoundResponse();
 
-    if (exitRoute) {
-      const promoRow = promo ? getPromoForRoute(exitRoute.id, promo) : null;
-      return (
-        <ExitLanding
-          apkUrl={promoRow?.apk_url || exitRoute.apk_url}
-          imageUrl={normalizeUploadImagePath(exitRoute.image_path)}
-          title={exitRoute.title || "下载"}
-          autoDownload={exitRoute.auto_download === 1}
-          promo={promoRow ? promoRow.code : promo}
-        />
-      );
-    }
+  const cloakResult = await guardRouteCloak(route, h, promo);
+  if (cloakResult) return cloakResult;
 
-    const promoRow = promo ? getPromoForRoute(entryRoute!.id, promo) : null;
-    const effectivePromo = promo && promoRow ? promoRow.code : "";
-
-    let visitId = 0;
-    try {
-      visitId = await recordVisit({
-        route_id: entryRoute!.id,
-        promo_code: effectivePromo,
-        page_variant: "real",
-        cloak_reason: "",
-        entry_domain: host,
-        exit_domain: entryRoute!.exit_domain,
-        headers: h,
-      });
-    } catch {
-      // 记录失败不阻塞跳转
-    }
-    const target = new URL(`https://${entryRoute!.exit_domain}/`);
-    if (effectivePromo) target.searchParams.set("c", effectivePromo);
-    if (visitId) target.searchParams.set("v", String(visitId));
-    redirect(target.toString());
+  if (exitRoute) {
+    const promoRow = promo ? getPromoForRoute(exitRoute.id, promo) : null;
+    return (
+      <ExitLanding
+        apkUrl={promoRow?.apk_url || exitRoute.apk_url}
+        imageUrl={normalizeUploadImagePath(exitRoute.image_path)}
+        title={exitRoute.title || "下载"}
+        autoDownload={exitRoute.auto_download === 1}
+        promo={promoRow ? promoRow.code : promo}
+      />
+    );
   }
 
-  const cloakOn = isCloakEnabled();
+  const promoRow = promo ? getPromoForRoute(route.id, promo) : null;
+  const effectivePromo = promo && promoRow ? promoRow.code : "";
 
-  // ── 分流判定（出口域名 + 入口域名均保护）──────────────────────────────
-  if (cloakOn) {
-    const ip = getClientIp(h);
-    const jar = cookies();
-    const humanToken = jar.get(HUMAN_COOKIE)?.value || "";
-    const probedCookie = jar.get(PROBED_COOKIE)?.value || "";
-
-    const isHuman = humanToken && verifyHumanToken(humanToken, ip);
-
-    if (!isHuman) {
-      // 已探测过判为机器 → 直接给假内容（不再发探针，防死循环）
-      if (probedCookie === "0") {
-        await recordGlobalVariant("fake", "JS 探针未通过", host, legacyExit || "", promo, h);
-        return decoyResponse(host, promo);
-      }
-
-      // 服务端层快速初判（同步：UA + ASN；异步加 PTR，有超时容忍）
-      const verdict = await classifyServerAsync(h);
-      if (verdict.decision === "bot") {
-        await recordGlobalVariant("fake", verdict.reason, host, legacyExit || "", promo, h);
-        return decoyResponse(host, promo);
-      }
-
-      // 需要 JS 探针确认 → 返回加载页
-      await recordGlobalVariant("probe", "需 JS 探针确认", host, legacyExit || "", promo, h);
-      return new Response(probePage(), {
-        headers: { "content-type": "text/html; charset=utf-8" },
-      });
-    }
+  let visitId = 0;
+  try {
+    visitId = await recordVisit({
+      route_id: route.id,
+      promo_code: effectivePromo,
+      page_variant: "real",
+      cloak_reason: "",
+      entry_domain: host,
+      exit_domain: route.exit_domain,
+      headers: h,
+    });
+  } catch {
+    // 记录失败不阻塞跳转
   }
-
-  // ---- 无启用线路 / 未配置：入口和出口都失效 ----
-  return new Response("404 Not Found", {
-    status: 404,
-    headers: { "content-type": "text/plain; charset=utf-8" },
-  });
+  const target = new URL(`https://${route.exit_domain}/`);
+  if (effectivePromo) target.searchParams.set("c", effectivePromo);
+  if (visitId) target.searchParams.set("v", String(visitId));
+  redirect(target.toString());
 }
 
 async function guardRouteCloak(route: LandingRoute, h: Headers, promo: string) {
@@ -226,58 +190,8 @@ async function recordRouteVariant(
   }
 }
 
-async function recordGlobalVariant(
-  pageVariant: "fake" | "probe",
-  reason: string,
-  entryDomain: string,
-  exitDomain: string,
-  promo: string,
-  h: Headers
-) {
-  try {
-    await recordVisit({
-      promo_code: promo,
-      page_variant: pageVariant,
-      cloak_reason: reason,
-      entry_domain: entryDomain,
-      exit_domain: exitDomain,
-      headers: h,
-    });
-  } catch {
-    // 记录失败不影响分流响应
-  }
-}
-
 function routeDecoyResponse(route: LandingRoute, promo: string) {
   const decoy = routeDecoyConfig(route);
-  return (
-    <ExitLanding
-      apkUrl={decoy.apkUrl}
-      imageUrl={decoy.imageUrl}
-      title={decoy.title}
-      autoDownload={false}
-      promo={promo}
-    />
-  );
-}
-
-// 返回假落地页（出口域名给假内容，入口域名给假跳转）
-function decoyResponse(host: string, promo: string) {
-  const decoy = getDecoyConfig();
-
-  // 兼容旧全局分流：只给假内容，不再使用旧入口/出口真实跳转。
-  if (isExitDomain(host)) {
-    return (
-      <ExitLanding
-        apkUrl={decoy.apkUrl}
-        imageUrl={decoy.imageUrl}
-        title={decoy.title}
-        autoDownload={false}
-        promo={promo}
-      />
-    );
-  }
-
   return (
     <ExitLanding
       apkUrl={decoy.apkUrl}
