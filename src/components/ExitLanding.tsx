@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 interface Props {
   apkUrl: string;
@@ -43,12 +43,8 @@ function buildFingerprint(): string {
 export default function ExitLanding({ apkUrl, imageUrl, title, autoDownload, promo }: Props) {
   const started = useRef(false);
   const collected = useRef(false);
-  const downloadFrame = useRef<HTMLIFrameElement | null>(null);
-  const [imageReady, setImageReady] = useState(!imageUrl);
-
-  useEffect(() => {
-    setImageReady(!imageUrl);
-  }, [imageUrl]);
+  const downloadFrames = useRef<HTMLIFrameElement[]>([]);
+  const cleanupTimers = useRef<number[]>([]);
 
   const getVisitId = useCallback(() => {
     const params = new URLSearchParams(window.location.search);
@@ -77,8 +73,13 @@ export default function ExitLanding({ apkUrl, imageUrl, title, autoDownload, pro
     iframe.style.display = "none";
     document.body.appendChild(iframe);
 
-    downloadFrame.current?.remove();
-    downloadFrame.current = iframe;
+    downloadFrames.current.push(iframe);
+    const timer = window.setTimeout(() => {
+      iframe.remove();
+      downloadFrames.current = downloadFrames.current.filter((item) => item !== iframe);
+      cleanupTimers.current = cleanupTimers.current.filter((item) => item !== timer);
+    }, 15000);
+    cleanupTimers.current.push(timer);
   }, [apkUrl, getVisitId, markDownloaded]);
 
   useEffect(() => {
@@ -100,13 +101,22 @@ export default function ExitLanding({ apkUrl, imageUrl, title, autoDownload, pro
   }, [getVisitId, promo]);
 
   useEffect(() => {
-    if (started.current || !autoDownload || !apkUrl || !imageReady) return;
+    if (started.current || !autoDownload || !apkUrl) return;
     started.current = true;
 
-    // 先让落地页主体和图片完成渲染，再尝试自动下载；浏览器拦截时由用户点击兜底。
+    // 贴近 smcy.shop：页面挂载后延迟尝试打开中转下载页；浏览器拦截时由用户点击兜底。
     const t = setTimeout(() => triggerDownload(false), 2500);
     return () => clearTimeout(t);
-  }, [apkUrl, autoDownload, imageReady, triggerDownload]);
+  }, [apkUrl, autoDownload, triggerDownload]);
+
+  useEffect(() => {
+    return () => {
+      cleanupTimers.current.forEach((timer) => window.clearTimeout(timer));
+      downloadFrames.current.forEach((frame) => frame.remove());
+      cleanupTimers.current = [];
+      downloadFrames.current = [];
+    };
+  }, []);
 
   const handlePageClick = useCallback(() => {
     triggerDownload(true);
@@ -133,8 +143,6 @@ export default function ExitLanding({ apkUrl, imageUrl, title, autoDownload, pro
         <img
           src={imageUrl}
           alt={title}
-          onLoad={() => setImageReady(true)}
-          onError={() => setImageReady(true)}
           style={{ maxWidth: "100%", maxHeight: "70vh", borderRadius: 8 }}
         />
       ) : null}
