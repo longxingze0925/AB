@@ -201,7 +201,7 @@ export default function CloakPage() {
       <Section title="IP 黑名单">
         <div className="admin-toolbar" style={{ marginBottom: 12 }}>
           <input
-            placeholder="IP 或 CIDR，如 1.2.3.4 或 1.2.3.0/24"
+            placeholder="IPv4 / IPv6 / CIDR，如 1.2.3.4、1.2.3.0/24、2605:52c0::/32"
             value={newCidr}
             onChange={(e) => setNewCidr(e.target.value)}
             className="admin-input"

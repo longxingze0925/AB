@@ -13,7 +13,7 @@ import {
   routeCloakEnabled,
   routeDecoyConfig,
 } from "@/lib/cloak";
-import { verifyHumanToken, HUMAN_COOKIE, PROBED_COOKIE } from "@/lib/token";
+import { getClientTokenKey, verifyHumanToken, HUMAN_COOKIE, PROBED_COOKIE } from "@/lib/token";
 import { normalizeUploadImagePath } from "@/lib/uploads";
 
 export const dynamic = "force-dynamic";
@@ -58,8 +58,12 @@ function ProbePage({ routeId }: { routeId: number }) {
   };
   try{
     var r=await fetch('${verifyUrl}',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});
-    location.reload();
-  }catch(_){location.reload();}
+    var d=await r.json().catch(function(){return{};});
+    if(d.human===true||d.next==='real'||d.next==='fake'){location.reload();return;}
+    document.body.innerHTML='<div style="font-family:sans-serif;color:#666;display:flex;height:90vh;align-items:center;justify-content:center">验证失败，请刷新重试</div>';
+  }catch(_){
+    document.body.innerHTML='<div style="font-family:sans-serif;color:#666;display:flex;height:90vh;align-items:center;justify-content:center">加载失败，请刷新重试</div>';
+  }
 })();
 `;
 
@@ -145,10 +149,11 @@ async function guardRouteCloak(route: LandingRoute, h: Headers, promo: string) {
   if (!routeCloakEnabled(route)) return null;
 
   const ip = getClientIp(h);
+  const clientKey = getClientTokenKey(h, ip);
   const jar = cookies();
   const humanToken = jar.get(HUMAN_COOKIE)?.value || "";
   const probedCookie = jar.get(PROBED_COOKIE)?.value || "";
-  const isHuman = humanToken && verifyHumanToken(humanToken, ip, `route:${route.id}`);
+  const isHuman = humanToken && verifyHumanToken(humanToken, clientKey, `route:${route.id}`);
 
   if (isHuman) return null;
 

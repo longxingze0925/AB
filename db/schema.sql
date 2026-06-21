@@ -115,10 +115,10 @@ CREATE TABLE IF NOT EXISTS ptr_cache (
   cached_at  TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
 
--- 手动 IP 黑名单：支持单 IP 或 CIDR（如 1.2.3.0/24）
+-- 手动 IP 黑名单：支持 IPv4 / IPv6 / CIDR（如 1.2.3.0/24、2605:52c0::/32）
 CREATE TABLE IF NOT EXISTS ip_blacklist (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
-  cidr       TEXT NOT NULL UNIQUE,        -- 单 IP 或 CIDR，如 1.2.3.4 或 1.2.3.0/24
+  cidr       TEXT NOT NULL UNIQUE,        -- 单 IP 或 CIDR，如 1.2.3.4、1.2.3.0/24、2605:52c0::/32
   note       TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );

@@ -28,7 +28,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/longxingze0925/AB/main/ops/i
 脚本会自动:
 1. 检查并安装 Docker + Docker Compose(如未安装)
 2. 下载项目代码
-3. 下载 IP 地理库(ip2asn + 城市库,共约 36MB)
+3. 下载 IP 地理库(ip2asn IPv4/IPv6 + 城市库)
 4. 交互式配置(后台域名、管理员账号密码)
 5. 启动服务
 
@@ -55,7 +55,8 @@ docker compose up -d --build
 
 | 库 | 作用 | 大小 |
 |---|---|---|
-| ip2asn-v4.tsv | 全球运营商(国内识别为电信/联通/移动) | ~6MB 压缩 |
+| ip2asn-v4.tsv | IPv4 全球运营商(国内识别为电信/联通/移动) | ~6MB 压缩 |
+| ip2asn-v6.tsv | IPv6 全球运营商/机房 ASN 识别 | ~8MB 压缩 |
 | dbip-city-lite-*.mmdb | 全球国家 + 省 + 市 | ~30MB 压缩 |
 
 运行 `ops/install.sh` 时会自动从 iptoasn.com 和 db-ip.com 下载最新版并解压到 `geodata/`。

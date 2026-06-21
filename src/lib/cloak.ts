@@ -2,6 +2,7 @@ import dns from "node:dns/promises";
 import { getDb, getSetting, LandingRoute } from "./db";
 import { getClientIp } from "./visit";
 import { normalizeUploadImagePath } from "./uploads";
+import { compareIpValue, ipMatchesCidr, parseIp } from "./ip";
 
 // ── 已知爬虫/脚本 UA 关键词（移植自 cloak-router/detect.go）──────────────
 const KNOWN_BOTS = [
@@ -38,25 +39,16 @@ const PTR_VERIFIED_BOT_DOMAINS = [
   "applebot.apple.com", "duckduckgo.com",
 ];
 
-// ── ASN 判断（复用 geo.ts 已加载的 _asnDesc/_asnStart/_asnEnd）────────────
-// geo.ts 没暴露内部数组，直接重用 ip2asn 做机房判断
-function ipToUint32(ip: string): number {
-  const parts = ip.split(".");
-  if (parts.length !== 4) return 0;
-  let n = 0;
-  for (const p of parts) {
-    const v = Number(p);
-    if (!Number.isInteger(v) || v < 0 || v > 255) return 0;
-    n = (n * 256 + v) >>> 0;
-  }
-  return n >>> 0;
+// ── ASN 判断：同时支持 ip2asn-v4.tsv / ip2asn-v6.tsv ───────────────────
+interface AsnTable {
+  start: bigint[];
+  end: bigint[];
+  org: string[];
 }
 
-// 懒加载 ASN 表（和 geo.ts 独立，避免耦合）
 let _asnLoaded = false;
-let _asnStart: Uint32Array | null = null;
-let _asnEnd: Uint32Array | null = null;
-let _asnOrg: string[] | null = null;
+let _asn4: AsnTable | null = null;
+let _asn6: AsnTable | null = null;
 
 function loadAsnForCloak() {
   if (_asnLoaded) return;
@@ -65,36 +57,43 @@ function loadAsnForCloak() {
     const fs = require("node:fs") as typeof import("node:fs");
     const path = require("node:path") as typeof import("node:path");
     const dir = process.env.GEODATA_DIR || path.join(process.cwd(), "geodata");
-    const file = path.join(dir, "ip2asn-v4.tsv");
-    if (!fs.existsSync(file)) return;
-    const lines = fs.readFileSync(file, "utf8").split("\n");
-    const starts: number[] = [], ends: number[] = [], orgs: string[] = [];
-    for (const line of lines) {
-      if (!line) continue;
-      const c = line.split("\t");
-      if (c.length < 5) continue;
-      const s = ipToUint32(c[0]), e = ipToUint32(c[1]);
-      if (!s && !e) continue;
-      starts.push(s); ends.push(e); orgs.push(c[4].toLowerCase());
-    }
-    _asnStart = Uint32Array.from(starts);
-    _asnEnd = Uint32Array.from(ends);
-    _asnOrg = orgs;
+    _asn4 = loadAsnFile(path.join(dir, "ip2asn-v4.tsv"), 4);
+    _asn6 = loadAsnFile(path.join(dir, "ip2asn-v6.tsv"), 6);
   } catch { /* 库缺失时降级 */ }
+}
+
+function loadAsnFile(file: string, version: 4 | 6): AsnTable | null {
+  const fs = require("node:fs") as typeof import("node:fs");
+  if (!fs.existsSync(file)) return null;
+  const table: AsnTable = { start: [], end: [], org: [] };
+  const lines = fs.readFileSync(file, "utf8").split("\n");
+  for (const line of lines) {
+    if (!line) continue;
+    const c = line.split("\t");
+    if (c.length < 5) continue;
+    const start = parseIp(c[0]);
+    const end = parseIp(c[1]);
+    if (!start || !end || start.version !== version || end.version !== version) continue;
+    table.start.push(start.value);
+    table.end.push(end.value);
+    table.org.push(c[4].toLowerCase());
+  }
+  return table.start.length > 0 ? table : null;
 }
 
 function isDatacenterIp(ip: string): boolean {
   loadAsnForCloak();
-  if (!_asnStart || !_asnEnd || !_asnOrg) return false;
-  const n = ipToUint32(ip);
-  if (!n) return false;
-  let lo = 0, hi = _asnStart.length - 1;
+  const parsed = parseIp(ip);
+  if (!parsed) return false;
+  const table = parsed.version === 4 ? _asn4 : _asn6;
+  if (!table) return false;
+  let lo = 0, hi = table.start.length - 1;
   while (lo <= hi) {
     const mid = (lo + hi) >> 1;
-    if (n < _asnStart[mid]) hi = mid - 1;
-    else if (n > _asnEnd[mid]) lo = mid + 1;
+    if (compareIpValue(parsed.value, table.start[mid]) < 0) hi = mid - 1;
+    else if (compareIpValue(parsed.value, table.end[mid]) > 0) lo = mid + 1;
     else {
-      const org = _asnOrg[mid];
+      const org = table.org[mid];
       return DATACENTER_HINTS.some((h) => org.includes(h));
     }
   }
@@ -172,31 +171,11 @@ export interface ServerVerdict {
   headerScore: number;
 }
 
-// ── 手动 IP 黑名单（CIDR 匹配）─────────────────────────────────────────────
-
-function ipToUint32Cidr(ip: string): number {
-  return ipToUint32(ip);
-}
-
-// 检查 IP 是否命中黑名单（支持单 IP 和 CIDR）
+// 检查 IP 是否命中黑名单（支持 IPv4 / IPv6 / CIDR）
 export function isBlacklisted(ip: string): boolean {
   const db = getDb();
   const rows = db.prepare("SELECT cidr FROM ip_blacklist").all() as { cidr: string }[];
-  const ipInt = ipToUint32Cidr(ip);
-  if (!ipInt) return false;
-
-  for (const { cidr } of rows) {
-    if (cidr.includes("/")) {
-      const [base, prefixStr] = cidr.split("/");
-      const prefix = parseInt(prefixStr, 10);
-      const mask = prefix === 0 ? 0 : (~0 << (32 - prefix)) >>> 0;
-      const baseInt = ipToUint32Cidr(base);
-      if ((ipInt & mask) === (baseInt & mask)) return true;
-    } else {
-      if (ipToUint32Cidr(cidr) === ipInt) return true;
-    }
-  }
-  return false;
+  return rows.some(({ cidr }) => ipMatchesCidr(ip, cidr));
 }
 
 // classifyServer：同步部分（UA + ASN + IP黑名单），PTR 是异步的单独调用

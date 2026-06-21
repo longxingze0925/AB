@@ -179,20 +179,26 @@ check_geodata() {
   local dir="$INSTALL_DIR/geodata"
   mkdir -p "$dir"
 
-  # ip2asn：运营商库(全球)
-  if [[ ! -f "$dir/ip2asn-v4.tsv" ]]; then
-    log "下载 IP-to-ASN 运营商库 (~6MB)"
-    if curl -fsSL --max-time 90 https://iptoasn.com/data/ip2asn-v4.tsv.gz \
-        | gunzip > "$dir/ip2asn-v4.tsv" 2>/dev/null && [[ -s "$dir/ip2asn-v4.tsv" ]]; then
-      printf '✓ 运营商库下载完成\n'
+  download_ip2asn() {
+    local version="$1" size="$2" file="$dir/ip2asn-${version}.tsv"
+    if [[ ! -f "$file" ]]; then
+      log "下载 IP-to-ASN ${version^^} 运营商库 (${size})"
+      if curl -fsSL --max-time 120 "https://iptoasn.com/data/ip2asn-${version}.tsv.gz" \
+          | gunzip > "$file" 2>/dev/null && [[ -s "$file" ]]; then
+        printf '✓ %s 运营商库下载完成\n' "${version^^}"
+      else
+        rm -f "$file"
+        warn "${version^^} 运营商库下载失败,对应 IP 运营商/分流识别将不可用。手动下载:"
+        printf '  curl -L https://iptoasn.com/data/ip2asn-%s.tsv.gz | gunzip > %s/ip2asn-%s.tsv\n' "$version" "$dir" "$version"
+      fi
     else
-      rm -f "$dir/ip2asn-v4.tsv"
-      warn "运营商库下载失败,运营商识别将不可用。手动下载:"
-      printf '  curl -L https://iptoasn.com/data/ip2asn-v4.tsv.gz | gunzip > %s/ip2asn-v4.tsv\n' "$dir"
+      printf '✓ %s 运营商库已存在\n' "${version^^}"
     fi
-  else
-    printf '✓ 运营商库已存在\n'
-  fi
+  }
+
+  # ip2asn：运营商库(全球)
+  download_ip2asn "v4" "~6MB"
+  download_ip2asn "v6" "~8MB"
 
   # mmdb：城市库(全球国家+省+市)
   if ! find "$dir" -name '*.mmdb' -size +1M 2>/dev/null | grep -q .; then
@@ -306,6 +312,8 @@ update_flow() {
   log "刷新部署文件"
   safe_refresh_source
 
+  check_geodata
+
   log "拉取最新镜像"
   in_install_dir
   compose_cmd pull
@@ -413,8 +421,11 @@ doctor_flow() {
 
   local gdir="$INSTALL_DIR/geodata"
   [[ -f "$gdir/ip2asn-v4.tsv" ]] \
-    && printf 'ip2asn      : 正常\n' \
-    || printf 'ip2asn      : 缺失（运营商/分流识别不可用）\n'
+    && printf 'ip2asn-v4   : 正常\n' \
+    || printf 'ip2asn-v4   : 缺失（IPv4 运营商/分流识别不可用）\n'
+  [[ -f "$gdir/ip2asn-v6.tsv" ]] \
+    && printf 'ip2asn-v6   : 正常\n' \
+    || printf 'ip2asn-v6   : 缺失（IPv6 运营商/分流识别不可用）\n'
   find "$gdir" -name "*.mmdb" 2>/dev/null | grep -q . \
     && printf '城市库(.mmdb): 正常\n' \
     || printf '城市库(.mmdb): 缺失（省市识别不可用）\n'

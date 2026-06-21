@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import maxmind, { Reader, CityResponse } from "maxmind";
+import { compareIpValue, parseIp } from "./ip";
 
 // 地理库目录:容器内挂载到 /data/geodata,本地为项目 geodata/
 function geoDir(): string {
@@ -26,71 +27,64 @@ async function getCityReader(): Promise<Reader<CityResponse> | null> {
   return _cityReader;
 }
 
-// ---------- ip2asn-v4.tsv → 运营商(ASN 名)----------
-// 加载到内存:三个并行数组(起始IP、结束IP、描述),二分查找
-let _asnStart: Uint32Array | null = null;
-let _asnEnd: Uint32Array | null = null;
-let _asnDesc: string[] | null = null;
-let _asnCountry: string[] | null = null;
-let _asnTried = false;
-
-function ipToInt(ip: string): number | null {
-  const parts = ip.split(".");
-  if (parts.length !== 4) return null; // 仅 IPv4
-  let n = 0;
-  for (const p of parts) {
-    const v = Number(p);
-    if (!Number.isInteger(v) || v < 0 || v > 255) return null;
-    n = n * 256 + v;
-  }
-  return n >>> 0;
+// ---------- ip2asn-v4/v6.tsv → 运营商(ASN 名)----------
+// 加载到内存:起始IP、结束IP、国家、描述，二分查找
+interface AsnTable {
+  start: bigint[];
+  end: bigint[];
+  country: string[];
+  desc: string[];
 }
+
+let _asn4: AsnTable | null = null;
+let _asn6: AsnTable | null = null;
+let _asnTried = false;
 
 function loadAsn() {
   if (_asnTried) return;
   _asnTried = true;
   try {
-    const file = path.join(geoDir(), "ip2asn-v4.tsv");
-    if (!fs.existsSync(file)) return;
-    const lines = fs.readFileSync(file, "utf8").split("\n");
-    const starts: number[] = [];
-    const ends: number[] = [];
-    const descs: string[] = [];
-    const countries: string[] = [];
-    for (const line of lines) {
-      if (!line) continue;
-      const c = line.split("\t");
-      if (c.length < 5) continue;
-      const s = ipToInt(c[0]);
-      const e = ipToInt(c[1]);
-      if (s === null || e === null) continue;
-      starts.push(s);
-      ends.push(e);
-      countries.push(c[3]); // 国家代码
-      descs.push(c[4]); // 运营商描述
-    }
-    _asnStart = Uint32Array.from(starts);
-    _asnEnd = Uint32Array.from(ends);
-    _asnDesc = descs;
-    _asnCountry = countries;
+    _asn4 = loadAsnFile("ip2asn-v4.tsv", 4);
+    _asn6 = loadAsnFile("ip2asn-v6.tsv", 6);
   } catch {
-    _asnStart = null;
+    _asn4 = null;
+    _asn6 = null;
   }
+}
+
+function loadAsnFile(fileName: string, version: 4 | 6): AsnTable | null {
+  const file = path.join(geoDir(), fileName);
+  if (!fs.existsSync(file)) return null;
+  const lines = fs.readFileSync(file, "utf8").split("\n");
+  const table: AsnTable = { start: [], end: [], country: [], desc: [] };
+  for (const line of lines) {
+    if (!line) continue;
+    const c = line.split("\t");
+    if (c.length < 5) continue;
+    const start = parseIp(c[0]);
+    const end = parseIp(c[1]);
+    if (!start || !end || start.version !== version || end.version !== version) continue;
+    table.start.push(start.value);
+    table.end.push(end.value);
+    table.country.push(c[3]);
+    table.desc.push(c[4]);
+  }
+  return table.start.length > 0 ? table : null;
 }
 
 // 二分查找 IP 所在区间,返回 [国家代码, 运营商描述]
 function lookupAsn(ip: string): { country: string; desc: string } | null {
   loadAsn();
-  if (!_asnStart || !_asnEnd || !_asnDesc || !_asnCountry) return null;
-  const n = ipToInt(ip);
-  if (n === null) return null;
-  let lo = 0;
-  let hi = _asnStart.length - 1;
+  const parsed = parseIp(ip);
+  if (!parsed) return null;
+  const table = parsed.version === 4 ? _asn4 : _asn6;
+  if (!table) return null;
+  let lo = 0, hi = table.start.length - 1;
   while (lo <= hi) {
     const mid = (lo + hi) >> 1;
-    if (n < _asnStart[mid]) hi = mid - 1;
-    else if (n > _asnEnd[mid]) lo = mid + 1;
-    else return { country: _asnCountry[mid], desc: _asnDesc[mid] };
+    if (compareIpValue(parsed.value, table.start[mid]) < 0) hi = mid - 1;
+    else if (compareIpValue(parsed.value, table.end[mid]) > 0) lo = mid + 1;
+    else return { country: table.country[mid], desc: table.desc[mid] };
   }
   return null;
 }
