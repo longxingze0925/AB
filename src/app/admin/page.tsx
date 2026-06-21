@@ -17,8 +17,14 @@ export default function Overview() {
 
   return (
     <div>
-      <h1 style={{ fontSize: 22, marginTop: 0 }}>数据总览</h1>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", gap: 16, marginBottom: 24 }}>
+      <div className="admin-page-header">
+        <div>
+          <h1 className="admin-page-title">数据总览</h1>
+          <p className="admin-page-desc">查看访问、下载、设备和线路状态。</p>
+        </div>
+      </div>
+
+      <div className="admin-stats-grid">
         <Card title="总访问" value={totalVisits} />
         <Card title="今日访问" value={today} />
         <Card title="触发下载" value={totalDownloads} />
@@ -26,17 +32,17 @@ export default function Overview() {
         <Card title="线路数量" value={routeCount} />
       </div>
 
-      <div style={{ background: "#fff", padding: 20, borderRadius: 10, border: "1px solid #e5e7eb" }}>
-        <h2 style={{ fontSize: 16, marginTop: 0 }}>兼容旧配置</h2>
-        <p style={{ color: "#6b7280", fontSize: 13, marginTop: 0 }}>
+      <div className="admin-panel admin-panel-padded">
+        <h2 className="admin-section-title">兼容旧配置</h2>
+        <p className="admin-page-desc" style={{ marginTop: 0 }}>
           若旧版本已设置入口/出口，系统会自动生成一条默认线路；后续请在线路管理里维护。
         </p>
         <Row label="当前入口域名" value={entry || "未设置"} ok={!!entry} />
         <Row label="当前出口域名" value={exit || "未设置"} ok={!!exit} />
         <Row label="APK 下载直链" value={apk || "未设置"} ok={!!apk} />
         {entry && (
-          <p style={{ marginTop: 16, fontSize: 13, color: "#555" }}>
-            推广链接格式:<code>https://{entry}/?c=推广码</code>
+          <p className="admin-page-desc" style={{ marginTop: 14 }}>
+            推广链接格式：<code>https://{entry}/?c=推广码</code>
           </p>
         )}
       </div>
@@ -46,18 +52,20 @@ export default function Overview() {
 
 function Card({ title, value }: { title: string; value: number }) {
   return (
-    <div style={{ background: "#fff", padding: 20, borderRadius: 10, border: "1px solid #e5e7eb" }}>
-      <div style={{ color: "#6b7280", fontSize: 13 }}>{title}</div>
-      <div style={{ fontSize: 28, fontWeight: 700, marginTop: 6 }}>{value}</div>
+    <div className="admin-card admin-stat-card">
+      <div className="admin-stat-label">{title}</div>
+      <div className="admin-stat-value">{value}</div>
     </div>
   );
 }
 
 function Row({ label, value, ok }: { label: string; value: string; ok: boolean }) {
   return (
-    <div style={{ display: "flex", padding: "8px 0", borderBottom: "1px solid #f3f4f6", fontSize: 14 }}>
-      <span style={{ width: 140, color: "#6b7280" }}>{label}</span>
-      <span style={{ color: ok ? "#111827" : "#dc2626", wordBreak: "break-all" }}>{value}</span>
+    <div className="admin-kv-row">
+      <span className="admin-muted">{label}</span>
+      <span className="admin-break" style={{ color: ok ? "var(--admin-text)" : "var(--admin-danger)" }}>
+        {value}
+      </span>
     </div>
   );
 }

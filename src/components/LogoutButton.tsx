@@ -6,19 +6,7 @@ export default function LogoutButton() {
     window.location.href = "/admin/login";
   }
   return (
-    <button
-      onClick={logout}
-      style={{
-        width: "100%",
-        padding: "8px",
-        background: "#374151",
-        color: "#e5e7eb",
-        border: "none",
-        borderRadius: 6,
-        cursor: "pointer",
-        fontSize: 13,
-      }}
-    >
+    <button onClick={logout} className="admin-nav-link" style={{ width: "100%", border: 0, cursor: "pointer" }}>
       退出登录
     </button>
   );

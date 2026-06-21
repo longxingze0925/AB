@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { headers } from "next/headers";
 import LogoutButton from "@/components/LogoutButton";
+import "./admin.css";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -23,30 +24,48 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     return <>{children}</>;
   }
 
+  const navItems = [
+    { href: "/admin", label: "数据总览" },
+    { href: "/admin/routes", label: "线路管理" },
+    { href: "/admin/promos", label: "推广码" },
+    { href: "/admin/visits", label: "访问记录" },
+    { href: "/admin/cloak", label: "分流管理" },
+    { href: "/admin/settings", label: "旧设置" },
+  ];
+
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "#f9fafb" }}>
-      <aside style={{ width: 200, background: "#111827", color: "#e5e7eb", padding: "20px 0" }}>
-        <div style={{ padding: "0 20px 20px", fontWeight: 700, fontSize: 16 }}>管理后台</div>
-        <nav style={{ display: "flex", flexDirection: "column" }}>
-          <NavLink href="/admin" label="数据总览" />
-          <NavLink href="/admin/routes" label="线路管理" />
-          <NavLink href="/admin/promos" label="推广码" />
-          <NavLink href="/admin/visits" label="访问记录" />
+    <div className="admin-shell">
+      <aside className="admin-sidebar">
+        <div className="admin-brand">
+          <div className="admin-brand-title">APK 分发后台</div>
+          <div className="admin-brand-subtitle">线路 / 推广 / 分流</div>
+        </div>
+        <nav className="admin-nav">
+          {navItems.map((item) => (
+            <NavLink
+              key={item.href}
+              href={item.href}
+              label={item.label}
+              active={pathname === item.href || (item.href !== "/admin" && pathname.startsWith(item.href))}
+            />
+          ))}
         </nav>
-        <div style={{ padding: "20px" }}>
+        <div className="admin-sidebar-footer">
           <LogoutButton />
         </div>
       </aside>
-      <main style={{ flex: 1, padding: 32, overflow: "auto" }}>{children}</main>
+      <main className="admin-main">
+        <div className="admin-content">{children}</div>
+      </main>
     </div>
   );
 }
 
-function NavLink({ href, label }: { href: string; label: string }) {
+function NavLink({ href, label, active }: { href: string; label: string; active: boolean }) {
   return (
     <Link
       href={href}
-      style={{ padding: "10px 20px", color: "#e5e7eb", textDecoration: "none", fontSize: 14 }}
+      className={active ? "admin-nav-link admin-nav-link-active" : "admin-nav-link"}
     >
       {label}
     </Link>

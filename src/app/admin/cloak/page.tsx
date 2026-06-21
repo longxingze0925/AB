@@ -97,19 +97,24 @@ export default function CloakPage() {
     else setBlError(d.error || "上传失败");
   }
 
-  if (loading) return <p>加载中…</p>;
+  if (loading) return <p className="admin-muted">加载中...</p>;
 
   return (
-    <div style={{ maxWidth: 640 }}>
-      <h1 style={{ fontSize: 22, marginTop: 0 }}>分流管理</h1>
+    <div style={{ maxWidth: 820 }}>
+      <div className="admin-page-header">
+        <div>
+          <h1 className="admin-page-title">分流管理</h1>
+          <p className="admin-page-desc">旧全局分流设置保留兼容；新线路建议在线路管理弹窗内单独设置。</p>
+        </div>
+      </div>
 
       <Section title="总开关">
         <label style={rowStyle}>
-          <span style={labelStyle}>启用分流</span>
+          <span className="admin-label" style={labelStyle}>启用分流</span>
           <select
             value={s.cloak_enabled}
             onChange={(e) => set("cloak_enabled", e.target.value)}
-            style={inputStyle}
+            className="admin-input"
           >
             <option value="0">关闭（所有流量走真实页面）</option>
             <option value="1">开启</option>
@@ -119,9 +124,9 @@ export default function CloakPage() {
 
       <Section title="判定参数">
         <label style={rowStyle}>
-          <span style={labelStyle}>
+          <span className="admin-label" style={labelStyle}>
             真人判定阈值
-            <small style={hint}>请求头分 + JS探针分 ≥ 此值判真人，建议 8，调高更严</small>
+            <small className="admin-hint">请求头分 + JS探针分 ≥ 此值判真人，建议 8，调高更严</small>
           </span>
           <input
             type="number"
@@ -129,13 +134,14 @@ export default function CloakPage() {
             max={30}
             value={s.cloak_threshold}
             onChange={(e) => set("cloak_threshold", e.target.value)}
-            style={{ ...inputStyle, width: 80 }}
+            className="admin-input"
+            style={{ maxWidth: 120 }}
           />
         </label>
         <label style={rowStyle}>
-          <span style={labelStyle}>
+          <span className="admin-label" style={labelStyle}>
             真人令牌有效期（小时）
-            <small style={hint}>通过探针后，此时间内无需重新验证</small>
+            <small className="admin-hint">通过探针后，此时间内无需重新验证</small>
           </span>
           <input
             type="number"
@@ -143,39 +149,40 @@ export default function CloakPage() {
             max={720}
             value={s.cloak_token_hours}
             onChange={(e) => set("cloak_token_hours", e.target.value)}
-            style={{ ...inputStyle, width: 80 }}
+            className="admin-input"
+            style={{ maxWidth: 120 }}
           />
         </label>
       </Section>
 
       <Section title="假页面内容（给爬虫/同行看的）">
         <label style={rowStyle}>
-          <span style={labelStyle}>
+          <span className="admin-label" style={labelStyle}>
             假标题
-            <small style={hint}>显示在假落地页顶部</small>
+            <small className="admin-hint">显示在假落地页顶部</small>
           </span>
           <input
             value={s.cloak_decoy_title}
             onChange={(e) => set("cloak_decoy_title", e.target.value)}
-            style={inputStyle}
+            className="admin-input"
           />
         </label>
         <label style={rowStyle}>
-          <span style={labelStyle}>
+          <span className="admin-label" style={labelStyle}>
             假 APK 链接
-            <small style={hint}>留空则按钮无效果；可填 404 链接或无关文件</small>
+            <small className="admin-hint">留空则按钮无效果；可填 404 链接或无关文件</small>
           </span>
           <input
             value={s.cloak_decoy_apk_url}
             onChange={(e) => set("cloak_decoy_apk_url", e.target.value)}
-            style={inputStyle}
+            className="admin-input"
             placeholder="https://example.com/fake.apk"
           />
         </label>
         <div style={rowStyle}>
-          <span style={labelStyle}>
+          <span className="admin-label" style={labelStyle}>
             假页面图片
-            <small style={hint}>留空则不显示图片</small>
+            <small className="admin-hint">留空则不显示图片</small>
           </span>
           <ImageUpload
             value={s.cloak_decoy_image_url}
@@ -186,50 +193,53 @@ export default function CloakPage() {
       </Section>
 
       <div style={{ marginTop: 24 }}>
-        <button onClick={save} style={btnStyle}>
+        <button onClick={save} className="admin-btn admin-btn-primary">
           {saved ? "已保存" : "保存"}
         </button>
       </div>
 
       <Section title="IP 黑名单">
-        <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+        <div className="admin-toolbar" style={{ marginBottom: 12 }}>
           <input
             placeholder="IP 或 CIDR，如 1.2.3.4 或 1.2.3.0/24"
             value={newCidr}
             onChange={(e) => setNewCidr(e.target.value)}
-            style={{ ...inputStyle, flex: 2, minWidth: 200 }}
+            className="admin-input"
+            style={{ flex: 2, minWidth: 240 }}
           />
           <input
             placeholder="备注（可选）"
             value={newNote}
             onChange={(e) => setNewNote(e.target.value)}
-            style={{ ...inputStyle, flex: 1, minWidth: 120 }}
+            className="admin-input"
+            style={{ flex: 1, minWidth: 160 }}
           />
-          <button onClick={addBlacklist} style={btnStyle}>添加</button>
+          <button onClick={addBlacklist} className="admin-btn admin-btn-primary">添加</button>
         </div>
-        {blError && <p style={{ color: "#dc2626", fontSize: 13, margin: "0 0 8px" }}>{blError}</p>}
+        {blError && <p className="admin-alert admin-alert-danger">{blError}</p>}
         {blacklist.length === 0 ? (
-          <p style={{ color: "#9ca3af", fontSize: 13 }}>暂无黑名单</p>
+          <p className="admin-empty">暂无黑名单</p>
         ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <div className="admin-table-wrap">
+          <table className="admin-table">
             <thead>
-              <tr style={{ color: "#6b7280", textAlign: "left", background: "#f9fafb" }}>
-                <th style={th}>IP / CIDR</th>
-                <th style={th}>备注</th>
-                <th style={th}>添加时间</th>
-                <th style={th}></th>
+              <tr>
+                <th>IP / CIDR</th>
+                <th>备注</th>
+                <th>添加时间</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
               {blacklist.map((r) => (
-                <tr key={r.id} style={{ borderTop: "1px solid #f3f4f6" }}>
-                  <td style={td}><code>{r.cidr}</code></td>
-                  <td style={td}>{r.note || "-"}</td>
-                  <td style={td}>{r.created_at}</td>
-                  <td style={td}>
+                <tr key={r.id}>
+                  <td><code className="admin-code">{r.cidr}</code></td>
+                  <td>{r.note || "-"}</td>
+                  <td>{r.created_at}</td>
+                  <td>
                     <button
                       onClick={() => deleteBlacklist(r.id)}
-                      style={{ color: "#dc2626", background: "none", border: "none", cursor: "pointer", fontSize: 13 }}
+                      className="admin-btn admin-btn-danger"
                     >
                       删除
                     </button>
@@ -238,20 +248,13 @@ export default function CloakPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </Section>
 
       <div
-        style={{
-          marginTop: 32,
-          padding: 16,
-          background: "#f9fafb",
-          borderRadius: 8,
-          border: "1px solid #e5e7eb",
-          fontSize: 13,
-          color: "#6b7280",
-          lineHeight: 1.8,
-        }}
+        className="admin-panel admin-panel-padded admin-muted"
+        style={{ marginTop: 32, fontSize: 13, lineHeight: 1.8 }}
       >
         <strong style={{ color: "#374151" }}>判定流程说明</strong>
         <br />
@@ -275,18 +278,8 @@ export default function CloakPage() {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div
-      style={{
-        background: "#fff",
-        border: "1px solid #e5e7eb",
-        borderRadius: 10,
-        padding: 20,
-        marginBottom: 16,
-      }}
-    >
-      <h2 style={{ fontSize: 15, marginTop: 0, marginBottom: 16, color: "#374151" }}>
-        {title}
-      </h2>
+    <div className="admin-panel admin-panel-padded">
+      <h2 className="admin-section-title">{title}</h2>
       {children}
     </div>
   );
@@ -302,10 +295,10 @@ function ImageUpload({
   onClear: () => void;
 }) {
   return (
-    <div style={{ flex: 1, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+    <div className="admin-upload-row" style={{ flex: 1 }}>
       {value ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={value} alt="预览" style={{ width: 88, height: 88, objectFit: "cover", borderRadius: 8, border: "1px solid #e5e7eb" }} />
+        <img src={value} alt="预览" className="admin-preview" />
       ) : null}
       <input
         type="file"
@@ -316,7 +309,7 @@ function ImageUpload({
           e.currentTarget.value = "";
         }}
       />
-      {value && <button onClick={onClear} style={{ padding: "6px 12px", background: "#f3f4f6", border: "1px solid #d1d5db", borderRadius: 6, cursor: "pointer" }}>清除</button>}
+      {value && <button onClick={onClear} className="admin-btn">清除</button>}
     </div>
   );
 }
@@ -330,29 +323,8 @@ const rowStyle: React.CSSProperties = {
 };
 const labelStyle: React.CSSProperties = {
   width: 220,
-  fontSize: 14,
-  color: "#374151",
   flexShrink: 0,
   display: "flex",
   flexDirection: "column",
   gap: 2,
 };
-const hint: React.CSSProperties = { fontWeight: 400, color: "#9ca3af", fontSize: 12 };
-const inputStyle: React.CSSProperties = {
-  flex: 1,
-  padding: "6px 10px",
-  border: "1px solid #d1d5db",
-  borderRadius: 6,
-  fontSize: 14,
-};
-const btnStyle: React.CSSProperties = {
-  padding: "8px 28px",
-  background: "#2563eb",
-  color: "#fff",
-  border: "none",
-  borderRadius: 6,
-  cursor: "pointer",
-  fontSize: 14,
-};
-const th: React.CSSProperties = { padding: "8px 10px", fontWeight: 500 };
-const td: React.CSSProperties = { padding: "8px 10px" };

@@ -55,8 +55,15 @@ export default function VisitsPage() {
 
   return (
     <div>
-      <h1 style={{ fontSize: 22, marginTop: 0 }}>访问记录</h1>
-      <div style={{ marginBottom: 12, display: "flex", gap: 8, alignItems: "center" }}>
+      <div className="admin-page-header">
+        <div>
+          <h1 className="admin-page-title">访问记录</h1>
+          <p className="admin-page-desc">查看访客命中的线路、真假页面、IP 来源和设备信息。</p>
+        </div>
+      </div>
+
+      <div className="admin-panel admin-panel-padded">
+        <div className="admin-toolbar">
         <input
           placeholder="按推广码筛选"
           value={promo}
@@ -64,68 +71,76 @@ export default function VisitsPage() {
             setPage(1);
             setPromo(e.target.value);
           }}
-          style={{ padding: 8, border: "1px solid #d1d5db", borderRadius: 6 }}
+          className="admin-input"
+          style={{ maxWidth: 240 }}
         />
-        <span style={{ color: "#6b7280", fontSize: 13 }}>共 {total} 条</span>
+          <span className="admin-muted" style={{ fontSize: 13 }}>共 {total} 条</span>
+        </div>
       </div>
 
-      <div style={{ overflowX: "auto", background: "#fff", borderRadius: 10, border: "1px solid #e5e7eb" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, whiteSpace: "nowrap" }}>
+      <div className="admin-panel admin-table-wrap">
+        <table className="admin-table" style={{ whiteSpace: "nowrap" }}>
           <thead>
-            <tr style={{ textAlign: "left", color: "#6b7280", background: "#f9fafb" }}>
+            <tr>
               {["时间", "页面", "原因", "线路", "推广码", "IP", "IP来源", "地区", "运营商", "系统", "设备", "浏览器", "屏幕", "时区", "网络", "CF Ray", "指纹", "下载", "入口", "出口"].map((h) => (
-                <th key={h} style={th}>{h}</th>
+                <th key={h}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.id} style={{ borderTop: "1px solid #f3f4f6" }}>
-                <td style={td}>{r.created_at}</td>
-                <td style={td}>{variantLabel(r.page_variant)}</td>
-                <td style={{ ...td, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis" }} title={r.cloak_reason}>{r.cloak_reason || "-"}</td>
-                <td style={td}>{r.route_name || "-"}</td>
-                <td style={td}>{r.promo_code || "-"}</td>
-                <td style={td}>{r.ip || "-"}</td>
-                <td style={td}>{r.ip_source || "-"}</td>
-                <td style={td}>{[r.country, r.province, r.city].filter(Boolean).join("/") || "-"}</td>
-                <td style={td}>{r.isp || "-"}</td>
-                <td style={td}>{[r.os, r.os_version].filter(Boolean).join(" ") || "-"}</td>
-                <td style={td}>{r.device || "-"}</td>
-                <td style={td}>{r.browser || "-"}</td>
-                <td style={td}>{r.screen || "-"}</td>
-                <td style={td}>{r.timezone || "-"}</td>
-                <td style={td}>{r.network || "-"}</td>
-                <td style={td} title={r.cf_ray}>{r.cf_ray || "-"}</td>
-                <td style={td} title={r.fingerprint}>{r.fingerprint ? r.fingerprint.slice(0, 8) : "-"}</td>
-                <td style={td}>{r.downloaded ? <span style={{ color: "#16a34a" }}>✓</span> : "-"}</td>
-                <td style={td}>{r.entry_domain || "-"}</td>
-                <td style={td}>{r.exit_domain || "-"}</td>
+              <tr key={r.id}>
+                <td>{r.created_at}</td>
+                <td>{variantLabel(r.page_variant)}</td>
+                <td className="admin-truncate" title={r.cloak_reason}>{r.cloak_reason || "-"}</td>
+                <td>{r.route_name || "-"}</td>
+                <td>{r.promo_code ? <span className="admin-code">{r.promo_code}</span> : "-"}</td>
+                <td>{r.ip || "-"}</td>
+                <td>{r.ip_source || "-"}</td>
+                <td>{[r.country, r.province, r.city].filter(Boolean).join("/") || "-"}</td>
+                <td>{r.isp || "-"}</td>
+                <td>{[r.os, r.os_version].filter(Boolean).join(" ") || "-"}</td>
+                <td>{r.device || "-"}</td>
+                <td>{r.browser || "-"}</td>
+                <td>{r.screen || "-"}</td>
+                <td>{r.timezone || "-"}</td>
+                <td>{r.network || "-"}</td>
+                <td title={r.cf_ray}>{r.cf_ray || "-"}</td>
+                <td title={r.fingerprint}>{r.fingerprint ? r.fingerprint.slice(0, 8) : "-"}</td>
+                <td>{r.downloaded ? <Badge variant="success" label="已下载" /> : "-"}</td>
+                <td>{r.entry_domain || "-"}</td>
+                <td>{r.exit_domain || "-"}</td>
               </tr>
             ))}
             {rows.length === 0 && (
-              <tr><td colSpan={20} style={{ ...td, textAlign: "center", color: "#9ca3af" }}>暂无数据</td></tr>
+              <tr><td colSpan={20} className="admin-empty">暂无数据</td></tr>
             )}
           </tbody>
         </table>
       </div>
 
-      <div style={{ marginTop: 16, display: "flex", gap: 8, alignItems: "center" }}>
-        <button disabled={page <= 1} onClick={() => setPage(page - 1)} style={pageBtn}>上一页</button>
+      <div className="admin-toolbar" style={{ marginTop: 16 }}>
+        <button disabled={page <= 1} onClick={() => setPage(page - 1)} className="admin-btn">上一页</button>
         <span style={{ fontSize: 13 }}>{page} / {pages}</span>
-        <button disabled={page >= pages} onClick={() => setPage(page + 1)} style={pageBtn}>下一页</button>
+        <button disabled={page >= pages} onClick={() => setPage(page + 1)} className="admin-btn">下一页</button>
       </div>
     </div>
   );
 }
 
 function variantLabel(value: string) {
-  if (value === "real") return <span style={{ color: "#16a34a", fontWeight: 600 }}>真</span>;
-  if (value === "fake") return <span style={{ color: "#dc2626", fontWeight: 600 }}>假</span>;
-  if (value === "probe") return <span style={{ color: "#2563eb", fontWeight: 600 }}>探针</span>;
+  if (value === "real") return <Badge variant="success" label="真" />;
+  if (value === "fake") return <Badge variant="danger" label="假" />;
+  if (value === "probe") return <Badge variant="primary" label="探针" />;
   return "-";
 }
 
-const th: React.CSSProperties = { padding: "10px 8px", fontWeight: 500 };
-const td: React.CSSProperties = { padding: "8px" };
-const pageBtn: React.CSSProperties = { padding: "6px 14px", background: "#f3f4f6", border: "1px solid #d1d5db", borderRadius: 6, cursor: "pointer" };
+function Badge({
+  variant,
+  label,
+}: {
+  variant: "success" | "muted" | "primary" | "danger" | "warning";
+  label: string;
+}) {
+  return <span className={`admin-badge admin-badge-${variant}`}>{label}</span>;
+}

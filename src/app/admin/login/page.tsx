@@ -27,48 +27,30 @@ export default function LoginPage() {
   }
 
   return (
-    <main style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f3f4f6" }}>
-      <form onSubmit={submit} style={{ background: "#fff", padding: 32, borderRadius: 12, width: 320, boxShadow: "0 2px 16px rgba(0,0,0,.08)" }}>
-        <h1 style={{ fontSize: 20, marginTop: 0, marginBottom: 20 }}>后台登录</h1>
+    <main className="admin-shell" style={{ alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <form onSubmit={submit} className="admin-card" style={{ width: 360, padding: 28 }}>
+        <h1 className="admin-page-title" style={{ fontSize: 22 }}>后台登录</h1>
+        <p className="admin-page-desc" style={{ marginBottom: 20 }}>登录 APK 分发后台</p>
         <input
           placeholder="账号"
           value={user}
           onChange={(e) => setUser(e.target.value)}
-          style={inputStyle}
+          className="admin-input"
+          style={{ marginBottom: 12 }}
         />
         <input
           type="password"
           placeholder="密码"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          style={inputStyle}
+          className="admin-input"
+          style={{ marginBottom: 12 }}
         />
-        {err && <p style={{ color: "#dc2626", fontSize: 13 }}>{err}</p>}
-        <button type="submit" disabled={loading} style={btnStyle}>
+        {err && <p className="admin-alert admin-alert-danger">{err}</p>}
+        <button type="submit" disabled={loading} className="admin-btn admin-btn-primary" style={{ width: "100%" }}>
           {loading ? "登录中..." : "登录"}
         </button>
       </form>
     </main>
   );
 }
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "10px 12px",
-  marginBottom: 12,
-  border: "1px solid #d1d5db",
-  borderRadius: 8,
-  boxSizing: "border-box",
-  fontSize: 14,
-};
-
-const btnStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "10px",
-  background: "#2563eb",
-  color: "#fff",
-  border: "none",
-  borderRadius: 8,
-  fontSize: 15,
-  cursor: "pointer",
-};

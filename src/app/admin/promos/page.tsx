@@ -72,17 +72,17 @@ export default function PromosPage() {
 
   return (
     <div>
-      <div style={header}>
+      <div className="admin-page-header">
         <div>
-          <h1 style={{ fontSize: 22, margin: 0 }}>推广码</h1>
-          <p style={{ color: "#6b7280", fontSize: 13, margin: "8px 0 0" }}>
+          <h1 className="admin-page-title">推广码</h1>
+          <p className="admin-page-desc">
             推广码归属到具体线路，访问时只在该线路入口域名下生效。
           </p>
         </div>
       </div>
 
-      <div style={panel}>
-        <div style={formGrid}>
+      <div className="admin-panel admin-panel-padded">
+        <div className="admin-form-grid">
           <Field label="所属线路">
             <select
               value={routeId}
@@ -91,7 +91,7 @@ export default function PromosPage() {
                 setRouteId(id);
                 load(id);
               }}
-              style={input}
+              className="admin-input"
             >
               <option value={0}>全部线路</option>
               {routes.map((r) => (
@@ -103,18 +103,18 @@ export default function PromosPage() {
           </Field>
           <Field label="推广码">
             <div style={{ display: "flex", gap: 8 }}>
-              <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} style={input} placeholder="A1B2C3" />
-              <button onClick={genCode} style={secondaryBtn}>随机</button>
+              <input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} className="admin-input" placeholder="A1B2C3" />
+              <button onClick={genCode} className="admin-btn">随机</button>
             </div>
           </Field>
           <Field label="渠道名称">
-            <input value={name} onChange={(e) => setName(e.target.value)} style={input} placeholder="渠道/分站名称" />
+            <input value={name} onChange={(e) => setName(e.target.value)} className="admin-input" placeholder="渠道/分站名称" />
           </Field>
           <Field label="专属 APK 链接(可选)">
-            <input value={apkUrl} onChange={(e) => setApkUrl(e.target.value)} style={input} placeholder="留空则使用线路 APK" />
+            <input value={apkUrl} onChange={(e) => setApkUrl(e.target.value)} className="admin-input" placeholder="留空则使用线路 APK" />
           </Field>
         </div>
-        <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 16 }}>
+        <div className="admin-toolbar" style={{ marginTop: 16 }}>
           <button
             onClick={() => {
               if (!routeId) {
@@ -126,25 +126,25 @@ export default function PromosPage() {
               setName("");
               setApkUrl("");
             }}
-            style={primaryBtn}
+            className="admin-btn admin-btn-primary"
           >
             添加推广码
           </button>
           {selectedRoute && (
-            <span style={{ color: "#6b7280", fontSize: 13 }}>
+            <span className="admin-muted" style={{ fontSize: 13 }}>
               当前入口：{selectedRoute.entry_domain || "未设置"}
             </span>
           )}
-          {error && <span style={{ color: "#dc2626", fontSize: 13 }}>{error}</span>}
+          {error && <span style={{ color: "var(--admin-danger)", fontSize: 13 }}>{error}</span>}
         </div>
       </div>
 
-      <div style={panel}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14, background: "#fff" }}>
+      <div className="admin-panel admin-table-wrap">
+        <table className="admin-table">
           <thead>
-            <tr style={{ textAlign: "left", color: "#6b7280", background: "#f9fafb" }}>
+            <tr>
               {["推广码", "线路", "名称", "访问", "下载", "状态", "推广链接", "APK 覆盖", "操作"].map((h) => (
-                <th key={h} style={th}>{h}</th>
+                <th key={h}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -152,26 +152,30 @@ export default function PromosPage() {
             {rows.map((r) => {
               const link = promoLink(r);
               return (
-                <tr key={r.id} style={{ borderTop: "1px solid #f3f4f6" }}>
-                  <td style={td}><b>{r.code}</b></td>
-                  <td style={td}>{r.route_name || r.entry_domain || "-"}</td>
-                  <td style={td}>{r.name || "-"}</td>
-                  <td style={td}>{r.visits}</td>
-                  <td style={td}>{r.downloads}</td>
-                  <td style={td}>{r.enabled ? <span style={{ color: "#16a34a" }}>启用</span> : <span style={{ color: "#9ca3af" }}>停用</span>}</td>
-                  <td style={td}>
-                    {link ? <button onClick={() => navigator.clipboard.writeText(link)} style={smallBtn} title={link}>复制链接</button> : "-"}
+                <tr key={r.id}>
+                  <td><span className="admin-code">{r.code}</span></td>
+                  <td>{r.route_name || r.entry_domain || "-"}</td>
+                  <td>{r.name || "-"}</td>
+                  <td>{r.visits}</td>
+                  <td>{r.downloads}</td>
+                  <td>{r.enabled ? <Badge variant="success" label="启用" /> : <Badge variant="muted" label="停用" />}</td>
+                  <td>
+                    {link ? <button onClick={() => navigator.clipboard.writeText(link)} className="admin-btn" title={link}>复制链接</button> : "-"}
                   </td>
-                  <td style={{ ...td, maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis" }}>{r.apk_url || "-"}</td>
-                  <td style={td}>
-                    <button onClick={() => act("toggle", { id: r.id })} style={smallBtn}>{r.enabled ? "停用" : "启用"}</button>
-                    <button onClick={() => act("delete", { id: r.id })} style={{ ...smallBtn, color: "#dc2626" }}>删除</button>
+                  <td className="admin-truncate admin-break" title={r.apk_url || ""}>
+                    {r.apk_url || "-"}
+                  </td>
+                  <td>
+                    <div className="admin-btn-row">
+                      <button onClick={() => act("toggle", { id: r.id })} className="admin-btn">{r.enabled ? "停用" : "启用"}</button>
+                      <button onClick={() => act("delete", { id: r.id })} className="admin-btn admin-btn-danger">删除</button>
+                    </div>
                   </td>
                 </tr>
               );
             })}
             {rows.length === 0 && (
-              <tr><td colSpan={9} style={{ ...td, textAlign: "center", color: "#9ca3af" }}>暂无推广码</td></tr>
+              <tr><td colSpan={9} className="admin-empty">暂无推广码</td></tr>
             )}
           </tbody>
         </table>
@@ -182,19 +186,19 @@ export default function PromosPage() {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label style={{ display: "block" }}>
-      <span style={{ display: "block", fontSize: 13, color: "#374151", marginBottom: 6 }}>{label}</span>
+    <label className="admin-field">
+      <span className="admin-label">{label}</span>
       {children}
     </label>
   );
 }
 
-const header: React.CSSProperties = { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 };
-const panel: React.CSSProperties = { background: "#fff", padding: 18, borderRadius: 8, border: "1px solid #e5e7eb", marginBottom: 18 };
-const formGrid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14 };
-const input: React.CSSProperties = { width: "100%", padding: "9px 10px", border: "1px solid #d1d5db", borderRadius: 6, boxSizing: "border-box", fontSize: 14 };
-const primaryBtn: React.CSSProperties = { padding: "9px 18px", background: "#2563eb", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer" };
-const secondaryBtn: React.CSSProperties = { padding: "8px 12px", background: "#f3f4f6", border: "1px solid #d1d5db", borderRadius: 6, cursor: "pointer", whiteSpace: "nowrap" };
-const smallBtn: React.CSSProperties = { padding: "4px 10px", marginRight: 6, background: "#f3f4f6", border: "1px solid #d1d5db", borderRadius: 6, cursor: "pointer", fontSize: 13 };
-const th: React.CSSProperties = { padding: "10px 8px", fontWeight: 500 };
-const td: React.CSSProperties = { padding: "10px 8px", wordBreak: "break-all" };
+function Badge({
+  variant,
+  label,
+}: {
+  variant: "success" | "muted" | "primary" | "danger" | "warning";
+  label: string;
+}) {
+  return <span className={`admin-badge admin-badge-${variant}`}>{label}</span>;
+}
