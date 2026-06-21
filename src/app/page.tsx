@@ -124,6 +124,7 @@ export default async function Page({
 
   const promoRow = promo ? getPromoForRoute(route.id, promo) : null;
   const effectivePromo = promo && promoRow ? promoRow.code : "";
+  const realReason = routeCloakEnabled(route) ? "真人令牌通过" : "分流关闭";
 
   let visitId = 0;
   try {
@@ -131,7 +132,7 @@ export default async function Page({
       route_id: route.id,
       promo_code: effectivePromo,
       page_variant: "real",
-      cloak_reason: "",
+      cloak_reason: realReason,
       entry_domain: host,
       exit_domain: route.exit_domain,
       headers: h,

@@ -169,9 +169,11 @@ export default function ExitLanding({ apkUrl, imageUrl, title, autoDownload, pro
           boxShadow: "0 16px 34px rgba(37,99,235,0.28)",
         }}
       >
-        立即下载
+        Download and Install
       </button>
-      <p style={{ color: "#888", fontSize: 13 }}>若未弹出下载,请点击页面任意位置</p>
+      <p style={{ color: "#888", fontSize: 13 }}>
+        If the download doesn't start, tap anywhere to install.
+      </p>
     </main>
   );
 }

@@ -22,7 +22,7 @@ const DATACENTER_HINTS = [
   "ovh", "hetzner", "vultr", "leaseweb", "scaleway", "contabo",
   "oracle", "ibm cloud", "softlayer", "choopa", "datacamp", "kamatera",
   "hosting", "host", "server", "colo", "cloud", "vps", "data center",
-  "datacenter", "gigabit", "ucloud", "kingsoft", "baidu",
+  "datacenter", "gigabit", "ucloud", "kingsoft", "baidu", "dmit",
 ];
 
 // ── PTR 机房域名特征（移植自 cloak-router/ptr.go）───────────────────────
@@ -31,7 +31,7 @@ const PTR_DC_HINTS = [
   "1e100.net", "azure", "cloudapp.net", "aliyun", "alibaba", "myqcloud.com",
   "tencent", "digitalocean.com", "linode.com", "vultr.com", "ovh.net",
   "hetzner.de", "leaseweb", "scaleway", "contabo.net", "oraclecloud.com",
-  "hosting", "server", "static", "colo", "datacenter",
+  "hosting", "server", "static", "colo", "datacenter", "dmit",
 ];
 
 const PTR_VERIFIED_BOT_DOMAINS = [
