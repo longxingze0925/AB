@@ -6,7 +6,9 @@ interface LandingRoute {
   id: number;
   name: string;
   entry_domain: string;
-  exit_domain: string;
+  exit_domain: string | null;
+  real_target_type: "internal" | "external";
+  external_url: string;
   title: string;
   image_path: string;
   apk_url: string;
@@ -41,6 +43,8 @@ const blank: FormState = {
   name: "",
   entry_domain: "",
   exit_domain: "",
+  real_target_type: "internal",
+  external_url: "",
   title: "下载",
   image_path: "",
   apk_url: "",
@@ -202,7 +206,7 @@ export default function RoutesPage() {
         <div>
           <h1 className="admin-page-title">线路管理</h1>
           <p className="admin-page-desc">
-            每条线路独立绑定入口域名、出口域名、落地页、下载链接和分流设置。
+            每条线路独立绑定入口域名、真用户去向、假页面和分流设置。
           </p>
         </div>
         <button onClick={openCreate} className="admin-btn admin-btn-primary">新增线路</button>
@@ -221,7 +225,7 @@ export default function RoutesPage() {
         <table className="admin-table">
           <thead>
             <tr>
-              {["状态", "线路", "入口域名", "出口域名", "访问", "下载", "落地页", "分流", "推广码", "操作"].map((h) => (
+              {["状态", "线路", "入口域名", "真用户去向", "访问", "下载", "落地页", "分流", "推广码", "操作"].map((h) => (
                 <th key={h}>{h}</th>
               ))}
             </tr>
@@ -237,7 +241,19 @@ export default function RoutesPage() {
                     <div className="admin-muted" style={{ marginTop: 3 }}>{r.title || "下载"}</div>
                   </td>
                   <td className="admin-nowrap">{r.entry_domain}</td>
-                  <td className="admin-nowrap">{r.exit_domain}</td>
+                  <td className="admin-nowrap admin-break">
+                    {r.real_target_type === "external" ? (
+                      <>
+                        <Badge variant="warning" label="外部网站" />
+                        <div className="admin-muted" style={{ marginTop: 4 }}>{r.external_url || "-"}</div>
+                      </>
+                    ) : (
+                      <>
+                        <Badge variant="primary" label="内部出口" />
+                        <div className="admin-muted" style={{ marginTop: 4 }}>{r.exit_domain || "-"}</div>
+                      </>
+                    )}
+                  </td>
                   <td>{r.visits}</td>
                   <td>{r.downloads}</td>
                   <td>{r.image_path ? <img src={r.image_path} alt="" className="admin-thumb" /> : "-"}</td>
@@ -282,9 +298,6 @@ export default function RoutesPage() {
                 <Field label="入口域名">
                   <input value={form.entry_domain} onChange={(e) => set("entry_domain", e.target.value)} className="admin-input" placeholder="go.example.com" />
                 </Field>
-                <Field label="出口域名">
-                  <input value={form.exit_domain} onChange={(e) => set("exit_domain", e.target.value)} className="admin-input" placeholder="dl.example.com" />
-                </Field>
                 <Field label="线路状态">
                   <select value={form.enabled} onChange={(e) => set("enabled", Number(e.target.value))} className="admin-input">
                     <option value={1}>启用</option>
@@ -294,23 +307,49 @@ export default function RoutesPage() {
               </div>
             </Section>
 
-            <Section title="落地页">
+            <Section title="真用户去向">
               <div className="admin-form-grid">
-                <Field label="落地页标题">
-                  <input value={form.title} onChange={(e) => set("title", e.target.value)} className="admin-input" />
-                </Field>
-                <Field label="APK 下载链接">
-                  <input value={form.apk_url} onChange={(e) => set("apk_url", e.target.value)} className="admin-input" placeholder="https://.../app.apk" />
-                </Field>
-                <Field label="打开自动下载">
-                  <select value={form.auto_download} onChange={(e) => set("auto_download", Number(e.target.value))} className="admin-input">
-                    <option value={1}>开启</option>
-                    <option value={0}>关闭</option>
+                <Field label="去向类型">
+                  <select
+                    value={form.real_target_type}
+                    onChange={(e) => set("real_target_type", e.target.value as FormState["real_target_type"])}
+                    className="admin-input"
+                  >
+                    <option value="internal">内部出口落地页</option>
+                    <option value="external">外部网站</option>
                   </select>
                 </Field>
+                {form.real_target_type === "internal" ? (
+                  <Field label="出口域名">
+                    <input value={form.exit_domain || ""} onChange={(e) => set("exit_domain", e.target.value)} className="admin-input" placeholder="dl.example.com" />
+                  </Field>
+                ) : (
+                  <Field label="外部网站 URL">
+                    <input value={form.external_url} onChange={(e) => set("external_url", e.target.value)} className="admin-input" placeholder="https://example.com/path" />
+                  </Field>
+                )}
               </div>
-              <ImageUpload label="落地页图片" value={form.image_path} onPick={(file) => upload(file, "image_path")} onClear={() => set("image_path", "")} />
             </Section>
+
+            {form.real_target_type === "internal" && (
+              <Section title="内部落地页">
+                <div className="admin-form-grid">
+                  <Field label="落地页标题">
+                    <input value={form.title} onChange={(e) => set("title", e.target.value)} className="admin-input" />
+                  </Field>
+                  <Field label="APK 下载链接">
+                    <input value={form.apk_url} onChange={(e) => set("apk_url", e.target.value)} className="admin-input" placeholder="https://.../app.apk" />
+                  </Field>
+                  <Field label="打开自动下载">
+                    <select value={form.auto_download} onChange={(e) => set("auto_download", Number(e.target.value))} className="admin-input">
+                      <option value={1}>开启</option>
+                      <option value={0}>关闭</option>
+                    </select>
+                  </Field>
+                </div>
+                <ImageUpload label="落地页图片" value={form.image_path} onPick={(file) => upload(file, "image_path")} onClear={() => set("image_path", "")} />
+              </Section>
+            )}
 
             <Section title="分流设置">
               <div className="admin-form-grid">
@@ -386,7 +425,8 @@ export default function RoutesPage() {
                       value={promoApkUrl}
                       onChange={(e) => setPromoApkUrl(e.target.value)}
                       className="admin-input"
-                      placeholder="留空则使用线路 APK"
+                      placeholder={promoRoute.real_target_type === "internal" ? "留空则使用线路 APK" : "外部网站模式下不生效"}
+                      disabled={promoRoute.real_target_type === "external"}
                     />
                   </Field>
                 </div>
@@ -406,6 +446,7 @@ export default function RoutesPage() {
                   </button>
                   <span className="admin-muted" style={{ fontSize: 13 }}>
                     链接格式：https://{promoRoute.entry_domain}/?c=推广码
+                    {promoRoute.real_target_type === "external" ? "，真用户会透传推广码到外部网站" : ""}
                   </span>
                 </div>
                 {promoError && <p className="admin-alert admin-alert-danger" style={{ marginTop: 12 }}>{promoError}</p>}

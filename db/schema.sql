@@ -75,12 +75,14 @@ CREATE INDEX IF NOT EXISTS idx_visits_fp      ON visits(fingerprint);
 CREATE INDEX IF NOT EXISTS idx_visits_route   ON visits(route_id);
 CREATE INDEX IF NOT EXISTS idx_promo_codes_route ON promo_codes(route_id);
 
--- 线路配置：一条线路 = 入口域名 + 出口域名 + 落地页 + 下载链接 + 分流设置
+-- 线路配置：一条线路 = 入口域名 + 真用户去向(内部出口/外部网站) + 假页面 + 分流设置
 CREATE TABLE IF NOT EXISTS landing_routes (
   id                     INTEGER PRIMARY KEY AUTOINCREMENT,
   name                   TEXT NOT NULL DEFAULT '',
   entry_domain           TEXT NOT NULL UNIQUE,
-  exit_domain            TEXT NOT NULL UNIQUE,
+  exit_domain            TEXT UNIQUE DEFAULT NULL,
+  real_target_type       TEXT NOT NULL DEFAULT 'internal', -- internal=内部出口落地页, external=外部网站
+  external_url           TEXT NOT NULL DEFAULT '',
   title                  TEXT NOT NULL DEFAULT '下载',
   image_path             TEXT NOT NULL DEFAULT '', -- 仅支持本地上传路径，如 /uploads/xxx.webp
   apk_url                TEXT NOT NULL DEFAULT '',

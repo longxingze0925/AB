@@ -7,7 +7,9 @@ export interface LandingRoute {
   id: number;
   name: string;
   entry_domain: string;
-  exit_domain: string;
+  exit_domain: string | null;
+  real_target_type: "internal" | "external";
+  external_url: string;
   title: string;
   image_path: string;
   apk_url: string;
@@ -66,6 +68,12 @@ function hasTable(db: Database.Database, table: string): boolean {
   return !!row;
 }
 
+function columnIsNotNull(db: Database.Database, table: string, column: string): boolean {
+  const rows = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string; notnull: number }[];
+  const row = rows.find((r) => r.name === column);
+  return !!row?.notnull;
+}
+
 function migrateBeforeSchema(db: Database.Database) {
   if (hasTable(db, "visits") && !hasColumn(db, "visits", "route_id")) {
     db.exec("ALTER TABLE visits ADD COLUMN route_id INTEGER");
@@ -84,6 +92,17 @@ function migrateBeforeSchema(db: Database.Database) {
   }
   if (hasTable(db, "promo_codes") && !hasColumn(db, "promo_codes", "route_id")) {
     db.exec("ALTER TABLE promo_codes ADD COLUMN route_id INTEGER");
+  }
+  if (hasTable(db, "landing_routes")) {
+    if (!hasColumn(db, "landing_routes", "real_target_type")) {
+      db.exec("ALTER TABLE landing_routes ADD COLUMN real_target_type TEXT DEFAULT 'internal'");
+    }
+    if (!hasColumn(db, "landing_routes", "external_url")) {
+      db.exec("ALTER TABLE landing_routes ADD COLUMN external_url TEXT DEFAULT ''");
+    }
+    if (columnIsNotNull(db, "landing_routes", "exit_domain")) {
+      rebuildLandingRoutesForExternalTargets(db);
+    }
   }
 }
 
@@ -108,6 +127,72 @@ function migrateAfterSchema(db: Database.Database) {
     db.exec("ALTER TABLE promo_codes ADD COLUMN route_id INTEGER");
   }
   db.exec("CREATE INDEX IF NOT EXISTS idx_promo_codes_route ON promo_codes(route_id)");
+  if (!hasColumn(db, "landing_routes", "real_target_type")) {
+    db.exec("ALTER TABLE landing_routes ADD COLUMN real_target_type TEXT DEFAULT 'internal'");
+  }
+  if (!hasColumn(db, "landing_routes", "external_url")) {
+    db.exec("ALTER TABLE landing_routes ADD COLUMN external_url TEXT DEFAULT ''");
+  }
+  if (columnIsNotNull(db, "landing_routes", "exit_domain")) {
+    rebuildLandingRoutesForExternalTargets(db);
+  }
+  db.exec("CREATE INDEX IF NOT EXISTS idx_landing_routes_entry ON landing_routes(entry_domain)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_landing_routes_exit ON landing_routes(exit_domain)");
+}
+
+function rebuildLandingRoutesForExternalTargets(db: Database.Database) {
+  if (!hasColumn(db, "landing_routes", "real_target_type")) {
+    db.exec("ALTER TABLE landing_routes ADD COLUMN real_target_type TEXT DEFAULT 'internal'");
+  }
+  if (!hasColumn(db, "landing_routes", "external_url")) {
+    db.exec("ALTER TABLE landing_routes ADD COLUMN external_url TEXT DEFAULT ''");
+  }
+  db.exec(`
+    DROP INDEX IF EXISTS idx_landing_routes_entry;
+    DROP INDEX IF EXISTS idx_landing_routes_exit;
+    ALTER TABLE landing_routes RENAME TO landing_routes_old_target_migration;
+
+    CREATE TABLE landing_routes (
+      id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+      name                   TEXT NOT NULL DEFAULT '',
+      entry_domain           TEXT NOT NULL UNIQUE,
+      exit_domain            TEXT UNIQUE DEFAULT NULL,
+      real_target_type       TEXT NOT NULL DEFAULT 'internal',
+      external_url           TEXT NOT NULL DEFAULT '',
+      title                  TEXT NOT NULL DEFAULT '下载',
+      image_path             TEXT NOT NULL DEFAULT '',
+      apk_url                TEXT NOT NULL DEFAULT '',
+      auto_download          INTEGER NOT NULL DEFAULT 1,
+      cloak_enabled          INTEGER NOT NULL DEFAULT 0,
+      cloak_threshold        INTEGER NOT NULL DEFAULT 8,
+      cloak_token_hours      INTEGER NOT NULL DEFAULT 6,
+      cloak_decoy_title      TEXT NOT NULL DEFAULT '下载',
+      cloak_decoy_image_path TEXT NOT NULL DEFAULT '',
+      cloak_decoy_apk_url    TEXT NOT NULL DEFAULT '',
+      enabled                INTEGER NOT NULL DEFAULT 1,
+      created_at             TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+      updated_at             TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+    );
+
+    INSERT INTO landing_routes (
+      id, name, entry_domain, exit_domain, real_target_type, external_url,
+      title, image_path, apk_url, auto_download, cloak_enabled, cloak_threshold,
+      cloak_token_hours, cloak_decoy_title, cloak_decoy_image_path,
+      cloak_decoy_apk_url, enabled, created_at, updated_at
+    )
+    SELECT
+      id, name, entry_domain, NULLIF(exit_domain, ''),
+      CASE WHEN real_target_type = 'external' THEN 'external' ELSE 'internal' END,
+      COALESCE(external_url, ''),
+      title, image_path, apk_url, auto_download, cloak_enabled, cloak_threshold,
+      cloak_token_hours, cloak_decoy_title, cloak_decoy_image_path,
+      cloak_decoy_apk_url, enabled, created_at, updated_at
+    FROM landing_routes_old_target_migration;
+
+    DROP TABLE landing_routes_old_target_migration;
+    CREATE INDEX IF NOT EXISTS idx_landing_routes_entry ON landing_routes(entry_domain);
+    CREATE INDEX IF NOT EXISTS idx_landing_routes_exit ON landing_routes(exit_domain);
+  `);
 }
 
 // 写入默认设置项(只在不存在时插入)
@@ -170,11 +255,11 @@ function ensureDefaultRouteFromLegacy(db: Database.Database) {
   const result = db.prepare(
     `
     INSERT OR IGNORE INTO landing_routes (
-      name, entry_domain, exit_domain, title, image_path, apk_url, auto_download,
+      name, entry_domain, exit_domain, real_target_type, external_url, title, image_path, apk_url, auto_download,
       cloak_enabled, cloak_threshold, cloak_token_hours,
       cloak_decoy_title, cloak_decoy_image_path, cloak_decoy_apk_url, enabled
     ) VALUES (
-      @name, @entry_domain, @exit_domain, @title, @image_path, @apk_url, @auto_download,
+      @name, @entry_domain, @exit_domain, 'internal', '', @title, @image_path, @apk_url, @auto_download,
       @cloak_enabled, @cloak_threshold, @cloak_token_hours,
       @cloak_decoy_title, @cloak_decoy_image_path, @cloak_decoy_apk_url, 1
     )
@@ -246,7 +331,9 @@ export function getRouteByEntry(domain: string): LandingRoute | null {
 
 export function getRouteByExit(domain: string): LandingRoute | null {
   const row = getDb()
-    .prepare("SELECT * FROM landing_routes WHERE exit_domain = ? AND enabled = 1 LIMIT 1")
+    .prepare(
+      "SELECT * FROM landing_routes WHERE exit_domain = ? AND real_target_type = 'internal' AND enabled = 1 LIMIT 1"
+    )
     .get(domain) as LandingRoute | undefined;
   return row || null;
 }
@@ -261,7 +348,10 @@ export function getRouteById(id: number): LandingRoute | null {
 export function isRouteDomain(domain: string): boolean {
   return !!getDb()
     .prepare(
-      "SELECT 1 FROM landing_routes WHERE enabled = 1 AND (entry_domain = ? OR exit_domain = ?) LIMIT 1"
+      `SELECT 1 FROM landing_routes
+       WHERE enabled = 1
+         AND (entry_domain = ? OR (real_target_type = 'internal' AND exit_domain = ?))
+       LIMIT 1`
     )
     .get(domain, domain);
 }

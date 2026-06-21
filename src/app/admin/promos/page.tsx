@@ -6,7 +6,9 @@ interface RouteOption {
   id: number;
   name: string;
   entry_domain: string;
-  exit_domain: string;
+  exit_domain: string | null;
+  real_target_type: "internal" | "external";
+  external_url: string;
   enabled: number;
 }
 
@@ -15,6 +17,8 @@ interface Promo {
   route_id: number | null;
   route_name: string;
   entry_domain: string;
+  real_target_type: "internal" | "external";
+  external_url: string;
   code: string;
   name: string;
   apk_url: string;
@@ -111,7 +115,13 @@ export default function PromosPage() {
             <input value={name} onChange={(e) => setName(e.target.value)} className="admin-input" placeholder="渠道/分站名称" />
           </Field>
           <Field label="专属 APK 链接(可选)">
-            <input value={apkUrl} onChange={(e) => setApkUrl(e.target.value)} className="admin-input" placeholder="留空则使用线路 APK" />
+            <input
+              value={apkUrl}
+              onChange={(e) => setApkUrl(e.target.value)}
+              className="admin-input"
+              placeholder={selectedRoute?.real_target_type === "external" ? "外部网站模式下不生效" : "留空则使用线路 APK"}
+              disabled={selectedRoute?.real_target_type === "external"}
+            />
           </Field>
         </div>
         <div className="admin-toolbar" style={{ marginTop: 16 }}>
@@ -121,7 +131,7 @@ export default function PromosPage() {
                 setError("请先创建线路");
                 return;
               }
-              act("add", { route_id: routeId, code, name, apk_url: apkUrl });
+              act("add", { route_id: routeId, code, name, apk_url: selectedRoute?.real_target_type === "external" ? "" : apkUrl });
               setCode("");
               setName("");
               setApkUrl("");
@@ -133,6 +143,7 @@ export default function PromosPage() {
           {selectedRoute && (
             <span className="admin-muted" style={{ fontSize: 13 }}>
               当前入口：{selectedRoute.entry_domain || "未设置"}
+              {selectedRoute.real_target_type === "external" ? "，真用户透传到外部网站" : ""}
             </span>
           )}
           {error && <span style={{ color: "var(--admin-danger)", fontSize: 13 }}>{error}</span>}

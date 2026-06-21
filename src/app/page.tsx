@@ -144,19 +144,35 @@ export default async function Page({
       page_variant: "real",
       cloak_reason: realReason,
       entry_domain: host,
-      exit_domain: route.exit_domain,
+      exit_domain: realTargetLabel(route),
       headers: h,
     }, await visitTask);
   } catch {
     // 记录失败不阻塞跳转
   }
+  const target = buildRealTargetUrl(route, h, effectivePromo, visitId);
+  redirect(target.toString());
+}
+
+function realTargetLabel(route: LandingRoute): string {
+  return route.real_target_type === "external" ? route.external_url : route.exit_domain || "";
+}
+
+function buildRealTargetUrl(route: LandingRoute, h: Headers, promo: string, visitId: number): URL {
+  if (route.real_target_type === "external") {
+    const target = new URL(route.external_url);
+    if (promo) target.searchParams.set("c", promo);
+    return target;
+  }
+
+  if (!route.exit_domain) notFound();
   const target = new URL(`https://${route.exit_domain}/`);
-  if (effectivePromo) target.searchParams.set("c", effectivePromo);
+  if (promo) target.searchParams.set("c", promo);
   if (visitId) target.searchParams.set("v", String(visitId));
   if (routeCloakEnabled(route)) {
     target.searchParams.set("ht", buildExitTransferToken(route, h));
   }
-  redirect(target.toString());
+  return target;
 }
 
 function buildExitTransferToken(route: LandingRoute, h: Headers): string {
@@ -225,7 +241,7 @@ async function recordRouteVariant(
       page_variant: pageVariant,
       cloak_reason: reason,
       entry_domain: route.entry_domain,
-      exit_domain: route.exit_domain,
+      exit_domain: realTargetLabel(route),
       headers: h,
     }, await visitTask);
   } catch {

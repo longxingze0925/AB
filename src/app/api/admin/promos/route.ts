@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
   const where = routeId > 0 ? "WHERE p.route_id = ?" : "";
   const args = routeId > 0 ? [routeId] : [];
   const rows = db.prepare(`
-    SELECT p.*, r.name AS route_name, r.entry_domain,
+    SELECT p.*, r.name AS route_name, r.entry_domain, r.real_target_type, r.external_url,
       (SELECT COUNT(*) FROM visits v WHERE (v.route_id = p.route_id OR (v.route_id IS NULL AND p.route_id IS NULL)) AND v.promo_code = p.code) AS visits,
       (SELECT COUNT(*) FROM visits v WHERE (v.route_id = p.route_id OR (v.route_id IS NULL AND p.route_id IS NULL)) AND v.promo_code = p.code AND v.downloaded = 1) AS downloads
     FROM promo_codes p
@@ -22,7 +22,9 @@ export async function GET(req: NextRequest) {
     ORDER BY p.id DESC
   `).all(...args);
   const routes = db
-    .prepare("SELECT id, name, entry_domain, exit_domain, enabled FROM landing_routes ORDER BY id DESC")
+    .prepare(
+      "SELECT id, name, entry_domain, exit_domain, real_target_type, external_url, enabled FROM landing_routes ORDER BY id DESC"
+    )
     .all();
   return NextResponse.json({ ok: true, rows, routes });
 }

@@ -9,6 +9,8 @@ const FIELDS = [
   "name",
   "entry_domain",
   "exit_domain",
+  "real_target_type",
+  "external_url",
   "title",
   "image_path",
   "apk_url",
@@ -41,19 +43,52 @@ function cleanDomain(value: unknown): string {
     .split(":")[0];
 }
 
+function cleanTargetType(value: unknown): "internal" | "external" {
+  return value === "external" ? "external" : "internal";
+}
+
+function cleanExternalUrl(value: unknown): string {
+  return String(value || "").trim();
+}
+
 function cleanBody(body: any) {
   const out: Record<string, string | number> = {};
   for (const field of FIELDS) {
     if (field === "entry_domain" || field === "exit_domain") out[field] = cleanDomain(body[field]);
+    else if (field === "real_target_type") out[field] = cleanTargetType(body[field]);
+    else if (field === "external_url") out[field] = cleanExternalUrl(body[field]);
     else if (NUMERIC.has(field)) out[field] = Number(body[field] || 0);
     else if (field === "image_path" || field === "cloak_decoy_image_path") {
       out[field] = normalizeUploadImagePath(body[field]);
     } else out[field] = String(body[field] || "").trim();
   }
+  if (out.real_target_type === "external") {
+    out.exit_domain = "";
+  } else {
+    out.external_url = "";
+  }
   out.title = out.title || "下载";
   out.cloak_threshold = Math.max(1, Number(out.cloak_threshold || 8));
   out.cloak_token_hours = Math.max(1, Number(out.cloak_token_hours || 6));
   return out;
+}
+
+function validateRoute(row: Record<string, string | number>): string | null {
+  if (!row.entry_domain) return "入口域名不能为空";
+  if (row.real_target_type === "external") {
+    if (!row.external_url) return "外部网站 URL 不能为空";
+    try {
+      const url = new URL(String(row.external_url));
+      if (url.protocol !== "http:" && url.protocol !== "https:") {
+        return "外部网站 URL 必须以 http:// 或 https:// 开头";
+      }
+    } catch {
+      return "外部网站 URL 格式不正确";
+    }
+    return null;
+  }
+  if (!row.exit_domain) return "内部出口模式下出口域名不能为空";
+  return null;
 }
 
 export async function GET() {
@@ -86,17 +121,16 @@ export async function POST(req: NextRequest) {
   try {
     if (action === "add") {
       const row = cleanBody({ ...body, enabled: body.enabled ?? 1 });
-      if (!row.entry_domain || !row.exit_domain) {
-        return NextResponse.json({ ok: false, error: "入口域名和出口域名不能为空" }, { status: 400 });
-      }
+      const error = validateRoute(row);
+      if (error) return NextResponse.json({ ok: false, error }, { status: 400 });
       db.prepare(
         `
         INSERT INTO landing_routes (
-          name, entry_domain, exit_domain, title, image_path, apk_url, auto_download,
+          name, entry_domain, exit_domain, real_target_type, external_url, title, image_path, apk_url, auto_download,
           cloak_enabled, cloak_threshold, cloak_token_hours,
           cloak_decoy_title, cloak_decoy_image_path, cloak_decoy_apk_url, enabled
         ) VALUES (
-          @name, @entry_domain, @exit_domain, @title, @image_path, @apk_url, @auto_download,
+          @name, @entry_domain, NULLIF(@exit_domain, ''), @real_target_type, @external_url, @title, @image_path, @apk_url, @auto_download,
           @cloak_enabled, @cloak_threshold, @cloak_token_hours,
           @cloak_decoy_title, @cloak_decoy_image_path, @cloak_decoy_apk_url, @enabled
         )
@@ -106,15 +140,16 @@ export async function POST(req: NextRequest) {
       const id = Number(body.id || 0);
       if (!id) return NextResponse.json({ ok: false, error: "缺少线路 ID" }, { status: 400 });
       const row = cleanBody(body);
-      if (!row.entry_domain || !row.exit_domain) {
-        return NextResponse.json({ ok: false, error: "入口域名和出口域名不能为空" }, { status: 400 });
-      }
+      const error = validateRoute(row);
+      if (error) return NextResponse.json({ ok: false, error }, { status: 400 });
       db.prepare(
         `
         UPDATE landing_routes SET
           name=@name,
           entry_domain=@entry_domain,
-          exit_domain=@exit_domain,
+          exit_domain=NULLIF(@exit_domain, ''),
+          real_target_type=@real_target_type,
+          external_url=@external_url,
           title=@title,
           image_path=@image_path,
           apk_url=@apk_url,
