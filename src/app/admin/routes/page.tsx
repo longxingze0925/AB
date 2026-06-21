@@ -22,6 +22,19 @@ interface LandingRoute {
   downloads: number;
 }
 
+interface Promo {
+  id: number;
+  route_id: number | null;
+  route_name: string;
+  entry_domain: string;
+  code: string;
+  name: string;
+  apk_url: string;
+  enabled: number;
+  visits: number;
+  downloads: number;
+}
+
 type FormState = Omit<LandingRoute, "id" | "visits" | "downloads">;
 
 const blank: FormState = {
@@ -46,6 +59,12 @@ export default function RoutesPage() {
   const [form, setForm] = useState<FormState>(blank);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [promoRoute, setPromoRoute] = useState<LandingRoute | null>(null);
+  const [promos, setPromos] = useState<Promo[]>([]);
+  const [promoCode, setPromoCode] = useState("");
+  const [promoName, setPromoName] = useState("");
+  const [promoApkUrl, setPromoApkUrl] = useState("");
+  const [promoError, setPromoError] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -122,6 +141,52 @@ export default function RoutesPage() {
     load();
   }
 
+  async function loadPromos(routeId: number) {
+    const res = await fetch(`/api/admin/promos?route_id=${routeId}`);
+    const d = await res.json();
+    if (d.ok) setPromos(d.rows);
+  }
+
+  function openPromos(route: LandingRoute) {
+    setPromoRoute(route);
+    setPromoCode("");
+    setPromoName("");
+    setPromoApkUrl("");
+    setPromoError("");
+    loadPromos(route.id);
+  }
+
+  function closePromos() {
+    setPromoRoute(null);
+    setPromos([]);
+    setPromoError("");
+  }
+
+  function genPromoCode() {
+    setPromoCode(Math.random().toString(36).slice(2, 8).toUpperCase());
+  }
+
+  async function promoAct(action: string, extra: Record<string, unknown> = {}) {
+    if (!promoRoute) return;
+    setPromoError("");
+    const res = await fetch("/api/admin/promos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, ...extra }),
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!d.ok) {
+      setPromoError(d.error || "操作失败");
+      return;
+    }
+    if (action === "add") {
+      setPromoCode("");
+      setPromoName("");
+      setPromoApkUrl("");
+    }
+    loadPromos(promoRoute.id);
+  }
+
   async function upload(file: File, key: "image_path" | "cloak_decoy_image_path") {
     const body = new FormData();
     body.append("file", file);
@@ -156,7 +221,7 @@ export default function RoutesPage() {
         <table className="admin-table">
           <thead>
             <tr>
-              {["状态", "线路", "入口域名", "出口域名", "访问", "下载", "落地页", "分流", "推广链接", "操作"].map((h) => (
+              {["状态", "线路", "入口域名", "出口域名", "访问", "下载", "落地页", "分流", "推广码", "操作"].map((h) => (
                 <th key={h}>{h}</th>
               ))}
             </tr>
@@ -178,7 +243,10 @@ export default function RoutesPage() {
                   <td>{r.image_path ? <img src={r.image_path} alt="" className="admin-thumb" /> : "-"}</td>
                   <td>{r.cloak_enabled ? <Badge variant="primary" label="开启" /> : <Badge variant="muted" label="关闭" />}</td>
                   <td>
-                    {link ? <button onClick={() => navigator.clipboard.writeText(link)} className="admin-btn">复制</button> : "-"}
+                    <div className="admin-btn-row">
+                      {link ? <button onClick={() => navigator.clipboard.writeText(link)} className="admin-btn">复制入口</button> : null}
+                      <button onClick={() => openPromos(r)} className="admin-btn">推广码</button>
+                    </div>
                   </td>
                   <td>
                     <div className="admin-btn-row">
@@ -273,6 +341,120 @@ export default function RoutesPage() {
             <div className="admin-modal-footer">
               <button onClick={closeModal} className="admin-btn">取消</button>
               <button onClick={save} className="admin-btn admin-btn-primary">{editingId ? "保存修改" : "添加线路"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {promoRoute && (
+        <div className="admin-modal-mask">
+          <div className="admin-modal">
+            <div className="admin-modal-header">
+              <div>
+                <h2 className="admin-modal-title">推广码</h2>
+                <p className="admin-page-desc">
+                  {promoRoute.name || promoRoute.entry_domain} / {promoRoute.entry_domain}
+                </p>
+              </div>
+              <button onClick={closePromos} className="admin-btn admin-btn-ghost">关闭</button>
+            </div>
+
+            <div className="admin-modal-body">
+              <div className="admin-panel admin-panel-padded">
+                <div className="admin-form-grid">
+                  <Field label="推广码">
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <input
+                        value={promoCode}
+                        onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                        className="admin-input"
+                        placeholder="A1B2C3"
+                      />
+                      <button onClick={genPromoCode} className="admin-btn">随机</button>
+                    </div>
+                  </Field>
+                  <Field label="渠道名称">
+                    <input
+                      value={promoName}
+                      onChange={(e) => setPromoName(e.target.value)}
+                      className="admin-input"
+                      placeholder="渠道/分站名称"
+                    />
+                  </Field>
+                  <Field label="专属 APK 链接(可选)">
+                    <input
+                      value={promoApkUrl}
+                      onChange={(e) => setPromoApkUrl(e.target.value)}
+                      className="admin-input"
+                      placeholder="留空则使用线路 APK"
+                    />
+                  </Field>
+                </div>
+                <div className="admin-toolbar" style={{ marginTop: 16 }}>
+                  <button
+                    onClick={() =>
+                      promoAct("add", {
+                        route_id: promoRoute.id,
+                        code: promoCode,
+                        name: promoName,
+                        apk_url: promoApkUrl,
+                      })
+                    }
+                    className="admin-btn admin-btn-primary"
+                  >
+                    添加推广码
+                  </button>
+                  <span className="admin-muted" style={{ fontSize: 13 }}>
+                    链接格式：https://{promoRoute.entry_domain}/?c=推广码
+                  </span>
+                </div>
+                {promoError && <p className="admin-alert admin-alert-danger" style={{ marginTop: 12 }}>{promoError}</p>}
+              </div>
+
+              <div className="admin-panel admin-table-wrap">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      {["推广码", "名称", "访问", "下载", "状态", "推广链接", "APK 覆盖", "操作"].map((h) => (
+                        <th key={h}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {promos.map((p) => {
+                      const link = `https://${promoRoute.entry_domain}/?c=${p.code}`;
+                      return (
+                        <tr key={p.id}>
+                          <td><span className="admin-code">{p.code}</span></td>
+                          <td>{p.name || "-"}</td>
+                          <td>{p.visits}</td>
+                          <td>{p.downloads}</td>
+                          <td>{p.enabled ? <Badge variant="success" label="启用" /> : <Badge variant="muted" label="停用" />}</td>
+                          <td>
+                            <button onClick={() => navigator.clipboard.writeText(link)} className="admin-btn" title={link}>
+                              复制链接
+                            </button>
+                          </td>
+                          <td className="admin-truncate admin-break" title={p.apk_url || ""}>{p.apk_url || "-"}</td>
+                          <td>
+                            <div className="admin-btn-row">
+                              <button onClick={() => promoAct("toggle", { id: p.id })} className="admin-btn">
+                                {p.enabled ? "停用" : "启用"}
+                              </button>
+                              <button onClick={() => promoAct("delete", { id: p.id })} className="admin-btn admin-btn-danger">
+                                删除
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {promos.length === 0 && (
+                      <tr><td colSpan={8} className="admin-empty">暂无推广码</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>

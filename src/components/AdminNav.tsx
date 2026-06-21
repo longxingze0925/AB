@@ -6,10 +6,7 @@ import { usePathname } from "next/navigation";
 const navItems = [
   { href: "/admin", label: "数据总览" },
   { href: "/admin/routes", label: "线路管理" },
-  { href: "/admin/promos", label: "推广码" },
   { href: "/admin/visits", label: "访问记录" },
-  { href: "/admin/cloak", label: "分流管理" },
-  { href: "/admin/settings", label: "旧设置" },
 ];
 
 export default function AdminNav() {
