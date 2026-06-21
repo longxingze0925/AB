@@ -6,7 +6,7 @@ export default function LogoutButton() {
     window.location.href = "/admin/login";
   }
   return (
-    <button onClick={logout} className="admin-nav-link" style={{ width: "100%", border: 0, cursor: "pointer" }}>
+    <button onClick={logout} className="admin-logout-btn">
       退出登录
     </button>
   );

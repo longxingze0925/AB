@@ -89,6 +89,27 @@
 .admin-sidebar-footer {
   margin-top: auto;
   padding: 16px 8px 4px;
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.admin-logout-btn {
+  width: 100%;
+  min-height: 38px;
+  padding: 9px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: var(--admin-radius);
+  background: rgba(15, 23, 42, 0.72);
+  color: #e5e7eb;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin-logout-btn:hover {
+  background: rgba(30, 41, 59, 0.95);
+  border-color: rgba(203, 213, 225, 0.42);
+  color: #ffffff;
 }
 
 .admin-main {
