@@ -13,7 +13,14 @@ import {
   routeCloakEnabled,
   routeDecoyConfig,
 } from "@/lib/cloak";
-import { getClientTokenKey, verifyHumanToken, HUMAN_COOKIE, PROBED_COOKIE } from "@/lib/token";
+import {
+  getClientTokenKey,
+  issueTransferToken,
+  verifyHumanToken,
+  verifyTransferToken,
+  HUMAN_COOKIE,
+  PROBED_COOKIE,
+} from "@/lib/token";
 import { normalizeUploadImagePath } from "@/lib/uploads";
 
 export const dynamic = "force-dynamic";
@@ -87,11 +94,12 @@ function ProbePage({ routeId }: { routeId: number }) {
 export default async function Page({
   searchParams,
 }: {
-  searchParams: { c?: string };
+  searchParams: { c?: string; ht?: string };
 }) {
   const h = headers();
   const host = getHost(h);
   const promo = (searchParams.c || "").trim();
+  const transferToken = (searchParams.ht || "").trim();
 
   // ---- 主域名:进后台 ----
   const main = (process.env.MAIN_DOMAIN || "").toLowerCase();
@@ -106,7 +114,8 @@ export default async function Page({
   // 未命中启用线路时，入口/出口域名都应直接失效。
   if (!route) notFound();
 
-  const cloakResult = await guardRouteCloak(route, h, promo);
+  const exitTokenAccepted = !!exitRoute && verifyExitTransferToken(exitRoute, h, transferToken);
+  const cloakResult = exitTokenAccepted ? null : await guardRouteCloak(route, h, promo);
   if (cloakResult) return cloakResult;
 
   if (exitRoute) {
@@ -144,7 +153,27 @@ export default async function Page({
   const target = new URL(`https://${route.exit_domain}/`);
   if (effectivePromo) target.searchParams.set("c", effectivePromo);
   if (visitId) target.searchParams.set("v", String(visitId));
+  if (routeCloakEnabled(route)) {
+    target.searchParams.set("ht", buildExitTransferToken(route, h));
+  }
   redirect(target.toString());
+}
+
+function buildExitTransferToken(route: LandingRoute, h: Headers): string {
+  const ip = getClientIp(h);
+  const clientKey = getClientTokenKey(h, ip);
+  return issueTransferToken(clientKey, 120, exitTransferScope(route));
+}
+
+function verifyExitTransferToken(route: LandingRoute, h: Headers, token: string): boolean {
+  if (!routeCloakEnabled(route) || !token) return false;
+  const ip = getClientIp(h);
+  const clientKey = getClientTokenKey(h, ip);
+  return verifyTransferToken(token, clientKey, exitTransferScope(route));
+}
+
+function exitTransferScope(route: LandingRoute): string {
+  return `route:${route.id}:exit:${route.exit_domain}`;
 }
 
 async function guardRouteCloak(

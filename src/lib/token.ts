@@ -33,6 +33,17 @@ export function issueHumanToken(clientKey: string, ttlHours: number, scope = "gl
   return Buffer.from(`${payload}:${mac}`).toString("base64url");
 }
 
+export function issueTransferToken(clientKey: string, ttlSeconds: number, scope: string): string {
+  const exp = Date.now() + ttlSeconds * 1000;
+  const payload = `${clientKey}:${scope}:${exp}`;
+  const mac = sign(payload);
+  return Buffer.from(`${payload}:${mac}`).toString("base64url");
+}
+
+export function verifyTransferToken(token: string, clientKey: string, scope: string): boolean {
+  return verifyHumanToken(token, clientKey, scope);
+}
+
 export function verifyHumanToken(token: string, clientKey: string, scope = "global"): boolean {
   try {
     const decoded = Buffer.from(token, "base64url").toString("utf8");
