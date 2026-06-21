@@ -6,7 +6,7 @@ import {
   getRouteByExit,
   getPromoForRoute,
 } from "@/lib/db";
-import { recordVisit, getClientIp } from "@/lib/visit";
+import { getClientIp, prepareVisit, recordPreparedVisit, type PreparedVisit } from "@/lib/visit";
 import ExitLanding from "@/components/ExitLanding";
 import {
   classifyServerAsync,
@@ -122,13 +122,14 @@ export default async function Page({
     );
   }
 
+  const visitTask = prepareVisit({ headers: h });
   const promoRow = promo ? getPromoForRoute(route.id, promo) : null;
   const effectivePromo = promo && promoRow ? promoRow.code : "";
   const realReason = routeCloakEnabled(route) ? "真人令牌通过" : "分流关闭";
 
   let visitId = 0;
   try {
-    visitId = await recordVisit({
+    visitId = recordPreparedVisit({
       route_id: route.id,
       promo_code: effectivePromo,
       page_variant: "real",
@@ -136,7 +137,7 @@ export default async function Page({
       entry_domain: host,
       exit_domain: route.exit_domain,
       headers: h,
-    });
+    }, await visitTask);
   } catch {
     // 记录失败不阻塞跳转
   }
@@ -146,7 +147,11 @@ export default async function Page({
   redirect(target.toString());
 }
 
-async function guardRouteCloak(route: LandingRoute, h: Headers, promo: string) {
+async function guardRouteCloak(
+  route: LandingRoute,
+  h: Headers,
+  promo: string
+) {
   if (!routeCloakEnabled(route)) return null;
 
   const ip = getClientIp(h);
@@ -159,17 +164,19 @@ async function guardRouteCloak(route: LandingRoute, h: Headers, promo: string) {
   if (isHuman) return null;
 
   if (probedCookie === "0") {
-    await recordRouteVariant(route, "fake", "JS 探针未通过", h, promo);
+    const visitTask = prepareVisit({ headers: h });
+    await recordRouteVariant(route, "fake", "JS 探针未通过", h, promo, visitTask);
     return routeDecoyResponse(route, promo);
   }
 
+  const visitTask = prepareVisit({ headers: h });
   const verdict = await classifyServerAsync(h);
   if (verdict.decision === "bot") {
-    await recordRouteVariant(route, "fake", verdict.reason, h, promo);
+    await recordRouteVariant(route, "fake", verdict.reason, h, promo, visitTask);
     return routeDecoyResponse(route, promo);
   }
 
-  await recordRouteVariant(route, "probe", "需 JS 探针确认", h, promo);
+  await recordRouteVariant(route, "probe", "需 JS 探针确认", h, promo, visitTask);
   return <ProbePage routeId={route.id} />;
 }
 
@@ -178,11 +185,12 @@ async function recordRouteVariant(
   pageVariant: "fake" | "probe",
   reason: string,
   h: Headers,
-  promo: string
+  promo: string,
+  visitTask: Promise<PreparedVisit>
 ) {
   try {
     const promoRow = promo ? getPromoForRoute(route.id, promo) : null;
-    await recordVisit({
+    recordPreparedVisit({
       route_id: route.id,
       promo_code: promoRow ? promoRow.code : "",
       page_variant: pageVariant,
@@ -190,7 +198,7 @@ async function recordRouteVariant(
       entry_domain: route.entry_domain,
       exit_domain: route.exit_domain,
       headers: h,
-    });
+    }, await visitTask);
   } catch {
     // 记录失败不影响分流响应
   }

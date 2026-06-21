@@ -77,14 +77,42 @@ export interface VisitInput {
   headers: Headers;
 }
 
-// 服务端首次记录访问,返回 visitId(供客户端后续回填屏幕/指纹等)
-export async function recordVisit(input: VisitInput): Promise<number> {
-  const { route_id, promo_code, page_variant, cloak_reason, entry_domain, exit_domain, headers } = input;
+export interface PreparedVisit {
+  ipInfo: ClientIpInfo;
+  ua: string;
+  uaInfo: ReturnType<typeof parseUa>;
+  geo: Awaited<ReturnType<typeof getGeo>>;
+  language: string;
+  referer: string;
+  cfRay: string;
+}
+
+// 提前准备访问记录里的派生字段。页面类型和分流原因出来后再写入,字段不减少。
+export async function prepareVisit(input: Pick<VisitInput, "headers">): Promise<PreparedVisit> {
+  const { headers } = input;
   const ua = headers.get("user-agent") || "";
   const ipInfo = getClientIpInfo(headers);
   const uaInfo = parseUa(ua);
   const geo = await getGeo(ipInfo.ip, headers);
 
+  return {
+    ipInfo,
+    ua,
+    uaInfo,
+    geo,
+    language: headers.get("accept-language")?.split(",")[0] || "",
+    referer: headers.get("referer") || "",
+    cfRay: headers.get("cf-ray") || "",
+  };
+}
+
+// 服务端首次记录访问,返回 visitId(供客户端后续回填屏幕/指纹等)
+export async function recordVisit(input: VisitInput): Promise<number> {
+  return recordPreparedVisit(input, await prepareVisit(input));
+}
+
+export function recordPreparedVisit(input: VisitInput, prepared: PreparedVisit): number {
+  const { route_id, promo_code, page_variant, cloak_reason, entry_domain, exit_domain } = input;
   const stmt = getDb().prepare(`
     INSERT INTO visits (
       route_id, promo_code, page_variant, cloak_reason, entry_domain, exit_domain, ip, ip_source, cf_ray,
@@ -106,18 +134,18 @@ export async function recordVisit(input: VisitInput): Promise<number> {
     cloak_reason: cloak_reason || "",
     entry_domain,
     exit_domain,
-    ip: ipInfo.ip,
-    ip_source: ipInfo.source,
-    cf_ray: headers.get("cf-ray") || "",
-    ...geo,
-    os: uaInfo.os,
-    os_version: uaInfo.os_version,
-    device: uaInfo.device,
-    browser: uaInfo.browser,
-    language: headers.get("accept-language")?.split(",")[0] || "",
-    referer: headers.get("referer") || "",
-    is_mobile: uaInfo.is_mobile,
-    user_agent: ua,
+    ip: prepared.ipInfo.ip,
+    ip_source: prepared.ipInfo.source,
+    cf_ray: prepared.cfRay,
+    ...prepared.geo,
+    os: prepared.uaInfo.os,
+    os_version: prepared.uaInfo.os_version,
+    device: prepared.uaInfo.device,
+    browser: prepared.uaInfo.browser,
+    language: prepared.language,
+    referer: prepared.referer,
+    is_mobile: prepared.uaInfo.is_mobile,
+    user_agent: prepared.ua,
   });
 
   return Number(info.lastInsertRowid);

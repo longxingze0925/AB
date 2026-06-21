@@ -34,6 +34,8 @@ export function getDb(): Database.Database {
 
   const db = new Database(dbPath);
   db.pragma("journal_mode = WAL");
+  db.pragma("synchronous = NORMAL");
+  db.pragma("busy_timeout = 3000");
   db.pragma("foreign_keys = ON");
 
   // 旧库先补列，再执行 schema 中依赖新列的索引创建。

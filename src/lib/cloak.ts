@@ -1,4 +1,4 @@
-import dns from "node:dns/promises";
+import dns, { Resolver } from "node:dns/promises";
 import { getDb, getSetting, LandingRoute } from "./db";
 import { getClientIp } from "./visit";
 import { normalizeUploadImagePath } from "./uploads";
@@ -100,10 +100,71 @@ function isDatacenterIp(ip: string): boolean {
   return false;
 }
 
-// ── PTR 反查（带数据库缓存，TTL 6 小时）─────────────────────────────────
+// ── PTR 反查（内存 + 数据库缓存，TTL 6 小时）──────────────────────────────
 interface PtrResult { isDc: boolean; isBot: boolean; host: string }
 
+const PTR_CACHE_TTL_MS = 6 * 3600 * 1000;
+const PTR_RESOLVERS = (process.env.PTR_RESOLVERS || "1.1.1.1,8.8.8.8")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+const ptrMemoryCache = new Map<string, { result: PtrResult; expiresAt: number }>();
+const ptrPending = new Map<string, Promise<PtrResult>>();
+
+function getMemoryPtr(ip: string): PtrResult | null {
+  const cached = ptrMemoryCache.get(ip);
+  if (!cached) return null;
+  if (cached.expiresAt > Date.now()) return cached.result;
+  ptrMemoryCache.delete(ip);
+  return null;
+}
+
+function setMemoryPtr(ip: string, result: PtrResult) {
+  ptrMemoryCache.set(ip, { result, expiresAt: Date.now() + PTR_CACHE_TTL_MS });
+}
+
+async function reverseWithResolvers(ip: string): Promise<string[]> {
+  const tasks: Promise<string[]>[] = [dns.reverse(ip)];
+  for (const server of PTR_RESOLVERS) {
+    const resolver = new Resolver();
+    resolver.setServers([server]);
+    tasks.push(resolver.reverse(ip));
+  }
+  return firstSuccessful(tasks);
+}
+
+async function firstSuccessful<T>(tasks: Promise<T>[]): Promise<T> {
+  return new Promise((resolve, reject) => {
+    let rejected = 0;
+    let lastError: unknown = null;
+    for (const task of tasks) {
+      task.then(resolve).catch((err) => {
+        rejected += 1;
+        lastError = err;
+        if (rejected === tasks.length) reject(lastError);
+      });
+    }
+  });
+}
+
 async function lookupPtr(ip: string): Promise<PtrResult> {
+  if (!ip) return { isDc: false, isBot: false, host: "" };
+
+  const memory = getMemoryPtr(ip);
+  if (memory) return memory;
+
+  const pending = ptrPending.get(ip);
+  if (pending) return pending;
+
+  const task = lookupPtrFresh(ip).finally(() => {
+    ptrPending.delete(ip);
+  });
+  ptrPending.set(ip, task);
+  return task;
+}
+
+async function lookupPtrFresh(ip: string): Promise<PtrResult> {
   const db = getDb();
   const cached = db.prepare(
     "SELECT is_dc, is_bot, host, cached_at FROM ptr_cache WHERE ip = ?"
@@ -111,14 +172,16 @@ async function lookupPtr(ip: string): Promise<PtrResult> {
 
   if (cached) {
     const age = Date.now() - new Date(cached.cached_at).getTime();
-    if (age < 6 * 3600 * 1000) {
-      return { isDc: !!cached.is_dc, isBot: !!cached.is_bot, host: cached.host };
+    if (age < PTR_CACHE_TTL_MS) {
+      const result = { isDc: !!cached.is_dc, isBot: !!cached.is_bot, host: cached.host };
+      setMemoryPtr(ip, result);
+      return result;
     }
   }
 
   let result: PtrResult = { isDc: false, isBot: false, host: "" };
   try {
-    const names = await dns.reverse(ip);
+    const names = await reverseWithResolvers(ip);
     if (names.length > 0) {
       const host = names[0].toLowerCase().replace(/\.$/, "");
       result.host = host;
@@ -145,6 +208,7 @@ async function lookupPtr(ip: string): Promise<PtrResult> {
        host=excluded.host, cached_at=excluded.cached_at`
   ).run(ip, result.isDc ? 1 : 0, result.isBot ? 1 : 0, result.host);
 
+  setMemoryPtr(ip, result);
   return result;
 }
 
