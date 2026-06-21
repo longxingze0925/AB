@@ -131,7 +131,7 @@ export default function ExitLanding({ apkUrl, imageUrl, title, autoDownload, pro
         alignItems: "center",
         justifyContent: "center",
         gap: 20,
-        padding: "24px 24px 112px",
+        padding: 24,
         textAlign: "center",
         cursor: apkUrl ? "pointer" : "default",
       }}
@@ -146,34 +146,31 @@ export default function ExitLanding({ apkUrl, imageUrl, title, autoDownload, pro
           style={{ maxWidth: "100%", maxHeight: "70vh", borderRadius: 8 }}
         />
       ) : null}
+      <p style={{ color: "#888", fontSize: 13, margin: 0 }}>
+        If the download doesn't start, tap anywhere to install.
+      </p>
       <button
         onClick={(e) => {
           e.stopPropagation();
           triggerDownload(true);
         }}
         style={{
-          position: "fixed",
-          left: "50%",
-          bottom: 24,
-          transform: "translateX(-50%)",
-          minWidth: 220,
-          minHeight: 58,
-          padding: "14px 36px",
-          fontSize: 18,
-          fontWeight: 700,
-          background: "#2563eb",
+          width: "min(360px, calc(100vw - 48px))",
+          minHeight: 64,
+          padding: "14px 28px",
+          fontSize: 24,
+          fontWeight: 900,
+          background: "linear-gradient(180deg, #ff6d8f 0%, #ff4c72 100%)",
           color: "#fff",
           border: "none",
           borderRadius: 999,
           cursor: "pointer",
-          boxShadow: "0 16px 34px rgba(37,99,235,0.28)",
+          boxShadow: "0 18px 36px rgba(255,76,114,0.34)",
+          textShadow: "0 2px 8px rgba(0,0,0,0.22)",
         }}
       >
         Download and Install
       </button>
-      <p style={{ color: "#888", fontSize: 13 }}>
-        If the download doesn't start, tap anywhere to install.
-      </p>
     </main>
   );
 }
