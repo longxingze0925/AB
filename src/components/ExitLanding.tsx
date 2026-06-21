@@ -64,11 +64,11 @@ export default function ExitLanding({ apkUrl, imageUrl, title, autoDownload, pro
     );
   }, []);
 
-  const triggerDownload = useCallback(() => {
+  const triggerDownload = useCallback((countDownload = true) => {
     if (!apkUrl) return;
 
     const visitId = getVisitId();
-    markDownloaded(visitId);
+    if (countDownload) markDownloaded(visitId);
 
     const iframe = document.createElement("iframe");
     iframe.src = apkUrl;
@@ -103,10 +103,14 @@ export default function ExitLanding({ apkUrl, imageUrl, title, autoDownload, pro
     if (started.current || !autoDownload || !apkUrl || !imageReady) return;
     started.current = true;
 
-    // 先让落地页主体和图片完成渲染，再在当前页内触发下载。
-    const t = setTimeout(triggerDownload, 1800);
+    // 先让落地页主体和图片完成渲染，再尝试自动下载；浏览器拦截时由用户点击兜底。
+    const t = setTimeout(() => triggerDownload(false), 2500);
     return () => clearTimeout(t);
   }, [apkUrl, autoDownload, imageReady, triggerDownload]);
+
+  const handlePageClick = useCallback(() => {
+    triggerDownload(true);
+  }, [triggerDownload]);
 
   return (
     <main
@@ -117,9 +121,11 @@ export default function ExitLanding({ apkUrl, imageUrl, title, autoDownload, pro
         alignItems: "center",
         justifyContent: "center",
         gap: 20,
-        padding: 24,
+        padding: "24px 24px 112px",
         textAlign: "center",
+        cursor: apkUrl ? "pointer" : "default",
       }}
+      onClick={handlePageClick}
     >
       <h1 style={{ fontSize: 22 }}>{title}</h1>
       {imageUrl ? (
@@ -129,25 +135,35 @@ export default function ExitLanding({ apkUrl, imageUrl, title, autoDownload, pro
           alt={title}
           onLoad={() => setImageReady(true)}
           onError={() => setImageReady(true)}
-          onClick={triggerDownload}
-          style={{ maxWidth: "100%", maxHeight: "70vh", cursor: "pointer", borderRadius: 8 }}
+          style={{ maxWidth: "100%", maxHeight: "70vh", borderRadius: 8 }}
         />
       ) : null}
       <button
-        onClick={triggerDownload}
+        onClick={(e) => {
+          e.stopPropagation();
+          triggerDownload(true);
+        }}
         style={{
-          padding: "12px 32px",
-          fontSize: 16,
+          position: "fixed",
+          left: "50%",
+          bottom: 24,
+          transform: "translateX(-50%)",
+          minWidth: 220,
+          minHeight: 58,
+          padding: "14px 36px",
+          fontSize: 18,
+          fontWeight: 700,
           background: "#2563eb",
           color: "#fff",
           border: "none",
-          borderRadius: 8,
+          borderRadius: 999,
           cursor: "pointer",
+          boxShadow: "0 16px 34px rgba(37,99,235,0.28)",
         }}
       >
-        点击下载
+        立即下载
       </button>
-      <p style={{ color: "#888", fontSize: 13 }}>若未弹出下载,请点击上方按钮</p>
+      <p style={{ color: "#888", fontSize: 13 }}>若未弹出下载,请点击页面任意位置</p>
     </main>
   );
 }
