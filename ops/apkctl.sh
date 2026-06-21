@@ -180,7 +180,9 @@ check_geodata() {
   mkdir -p "$dir"
 
   download_ip2asn() {
-    local version="$1" size="$2" file="$dir/ip2asn-${version}.tsv"
+    local version="$1"
+    local size="$2"
+    local file="$dir/ip2asn-${version}.tsv"
     if [[ ! -f "$file" ]]; then
       log "下载 IP-to-ASN ${version^^} 运营商库 (${size})"
       if curl -fsSL --max-time 120 "https://iptoasn.com/data/ip2asn-${version}.tsv.gz" \
