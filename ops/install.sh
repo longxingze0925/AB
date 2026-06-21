@@ -20,5 +20,10 @@ tmp_dir="$(mktemp -d)"
 cleanup() { rm -rf "$tmp_dir"; }
 trap cleanup EXIT
 
-curl -fsSL "$APK_RAW_BASE/ops/apkctl.sh" -o "$tmp_dir/apkctl.sh"
+cache_bust="${APK_CACHE_BUST:-$(date +%s)}"
+curl -fsSL \
+  -H "Cache-Control: no-cache" \
+  -H "Pragma: no-cache" \
+  "$APK_RAW_BASE/ops/apkctl.sh?cb=$cache_bust" \
+  -o "$tmp_dir/apkctl.sh"
 exec bash "$tmp_dir/apkctl.sh"
