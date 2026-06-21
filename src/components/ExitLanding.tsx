@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface Props {
   apkUrl: string;
@@ -42,18 +42,52 @@ function buildFingerprint(): string {
 
 export default function ExitLanding({ apkUrl, imageUrl, title, autoDownload, promo }: Props) {
   const started = useRef(false);
+  const collected = useRef(false);
+  const downloadFrame = useRef<HTMLIFrameElement | null>(null);
+  const [imageReady, setImageReady] = useState(!imageUrl);
 
   useEffect(() => {
-    if (started.current) return;
-    started.current = true;
+    setImageReady(!imageUrl);
+  }, [imageUrl]);
 
-    // 从 URL 取 visitId(入口跳转时带过来),回填客户端信息
+  const getVisitId = useCallback(() => {
     const params = new URLSearchParams(window.location.search);
-    const visitId = params.get("v");
+    const visitId = Number(params.get("v") || 0);
+    return Number.isFinite(visitId) ? visitId : 0;
+  }, []);
+
+  const markDownloaded = useCallback((visitId: number) => {
+    if (!visitId) return;
+    navigator.sendBeacon?.(
+      "/api/downloaded",
+      new Blob([JSON.stringify({ id: visitId })], { type: "application/json" })
+    );
+  }, []);
+
+  const triggerDownload = useCallback(() => {
+    if (!apkUrl) return;
+
+    const visitId = getVisitId();
+    markDownloaded(visitId);
+
+    const iframe = document.createElement("iframe");
+    iframe.src = apkUrl;
+    iframe.title = "download";
+    iframe.setAttribute("aria-hidden", "true");
+    iframe.style.display = "none";
+    document.body.appendChild(iframe);
+
+    downloadFrame.current?.remove();
+    downloadFrame.current = iframe;
+  }, [apkUrl, getVisitId, markDownloaded]);
+
+  useEffect(() => {
+    if (collected.current) return;
+    collected.current = true;
 
     const conn = (navigator as any).connection;
     const payload = {
-      id: visitId ? Number(visitId) : 0,
+      id: getVisitId(),
       promo,
       screen: `${screen.width}x${screen.height}@${window.devicePixelRatio}x`,
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "",
@@ -63,23 +97,16 @@ export default function ExitLanding({ apkUrl, imageUrl, title, autoDownload, pro
 
     // 回填客户端采集信息(瞬间执行,无感)
     navigator.sendBeacon?.("/api/collect", new Blob([JSON.stringify(payload)], { type: "application/json" }));
+  }, [getVisitId, promo]);
 
-    // 自动触发 APK 下载
-    if (autoDownload && apkUrl) {
-      const t = setTimeout(() => {
-        if (visitId) {
-          // 标记下载
-          navigator.sendBeacon?.("/api/downloaded", new Blob([JSON.stringify({ id: Number(visitId) })], { type: "application/json" }));
-        }
-        window.location.href = apkUrl;
-      }, 800);
-      return () => clearTimeout(t);
-    }
-  }, [apkUrl, autoDownload, promo]);
+  useEffect(() => {
+    if (started.current || !autoDownload || !apkUrl || !imageReady) return;
+    started.current = true;
 
-  const handleManual = () => {
-    if (apkUrl) window.location.href = apkUrl;
-  };
+    // 先让落地页主体和图片完成渲染，再在当前页内触发下载。
+    const t = setTimeout(triggerDownload, 1800);
+    return () => clearTimeout(t);
+  }, [apkUrl, autoDownload, imageReady, triggerDownload]);
 
   return (
     <main
@@ -100,12 +127,14 @@ export default function ExitLanding({ apkUrl, imageUrl, title, autoDownload, pro
         <img
           src={imageUrl}
           alt={title}
-          onClick={handleManual}
+          onLoad={() => setImageReady(true)}
+          onError={() => setImageReady(true)}
+          onClick={triggerDownload}
           style={{ maxWidth: "100%", maxHeight: "70vh", cursor: "pointer", borderRadius: 8 }}
         />
       ) : null}
       <button
-        onClick={handleManual}
+        onClick={triggerDownload}
         style={{
           padding: "12px 32px",
           fontSize: 16,
@@ -118,7 +147,7 @@ export default function ExitLanding({ apkUrl, imageUrl, title, autoDownload, pro
       >
         点击下载
       </button>
-      <p style={{ color: "#888", fontSize: 13 }}>若未自动开始,请点击上方按钮</p>
+      <p style={{ color: "#888", fontSize: 13 }}>若未弹出下载,请点击上方按钮</p>
     </main>
   );
 }
