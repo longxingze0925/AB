@@ -40,12 +40,19 @@ function ProbePage({ routeId }: { routeId: number }) {
   function webglVendor(){
     try{var c=document.createElement('canvas');var gl=c.getContext('webgl')||c.getContext('experimental-webgl');
       if(!gl)return'';var e=gl.getExtension('WEBGL_debug_renderer_info');
+      return e?String(gl.getParameter(e.UNMASKED_VENDOR_WEBGL)):'';}catch(_){return'';}
+  }
+  function webglRenderer(){
+    try{var c=document.createElement('canvas');var gl=c.getContext('webgl')||c.getContext('experimental-webgl');
+      if(!gl)return'';var e=gl.getExtension('WEBGL_debug_renderer_info');
       return e?String(gl.getParameter(e.UNMASKED_RENDERER_WEBGL)):'';}catch(_){return'';}
   }
   var notifQ='';
   try{if(navigator.permissions&&navigator.permissions.query){
     var st=await navigator.permissions.query({name:'notifications'});notifQ=st.state;}}catch(_){}
   var nav=navigator;
+  var uaPlatform='';
+  try{uaPlatform=(nav.userAgentData&&nav.userAgentData.platform)||'';}catch(_){}
   var p={
     js:true,
     webdriver:nav.webdriver===true,
@@ -54,10 +61,15 @@ function ProbePage({ routeId }: { routeId: number }) {
       Object.keys(window).some(function(k){return k.indexOf('cdc_')===0;})),
     hasChrome:!!window.chrome,
     webglVendor:webglVendor(),
+    webglRenderer:webglRenderer(),
     plugins:(nav.plugins&&nav.plugins.length)||0,
     hc:nav.hardwareConcurrency||0,
+    dm:nav.deviceMemory||0,
     sw:screen.width||0,sh:screen.height||0,
+    dpr:window.devicePixelRatio||1,
     tz:(Intl&&Intl.DateTimeFormat)?Intl.DateTimeFormat().resolvedOptions().timeZone:'',
+    platform:nav.platform||'',
+    uaPlatform:uaPlatform,
     langs:(nav.languages&&nav.languages[0])||nav.language||'',
     notif:(window.Notification&&Notification.permission)||'',
     notifQ:notifQ,
