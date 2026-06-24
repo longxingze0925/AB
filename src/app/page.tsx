@@ -80,9 +80,9 @@ function ProbePage({ routeId, promo }: { routeId: number; promo: string }) {
     var d=await r.json().catch(function(){return{};});
     if(d.next==='real'&&d.target){location.replace(d.target);return;}
     if(d.human===true||d.next==='real'||d.next==='fake'){location.reload();return;}
-    document.body.innerHTML='<div style="font-family:sans-serif;color:#666;display:flex;height:90vh;align-items:center;justify-content:center">验证失败，请刷新重试</div>';
+    document.body.innerHTML='<div style="font-family:sans-serif;color:#666;display:flex;height:90vh;align-items:center;justify-content:center">Verification failed. Please refresh and try again.</div>';
   }catch(_){
-    document.body.innerHTML='<div style="font-family:sans-serif;color:#666;display:flex;height:90vh;align-items:center;justify-content:center">加载失败，请刷新重试</div>';
+    document.body.innerHTML='<div style="font-family:sans-serif;color:#666;display:flex;height:90vh;align-items:center;justify-content:center">Loading failed. Please refresh and try again.</div>';
   }
 })();
 `;
@@ -98,7 +98,7 @@ function ProbePage({ routeId, promo }: { routeId: number; promo: string }) {
         justifyContent: "center",
       }}
     >
-      <div>正在加载，请稍候…</div>
+      <div>Loading, please wait...</div>
       <script dangerouslySetInnerHTML={{ __html: script }} />
     </main>
   );
