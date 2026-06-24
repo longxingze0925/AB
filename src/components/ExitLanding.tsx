@@ -105,7 +105,7 @@ export default function ExitLanding({ apkUrl, imageUrl, title, autoDownload, pro
     started.current = true;
 
     // 贴近 smcy.shop：页面挂载后延迟尝试打开中转下载页；浏览器拦截时由用户点击兜底。
-    const t = setTimeout(() => triggerDownload(false), 2500);
+    const t = setTimeout(() => triggerDownload(false), 1000);
     return () => clearTimeout(t);
   }, [apkUrl, autoDownload, triggerDownload]);
 
