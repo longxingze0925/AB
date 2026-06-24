@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { markDownloaded } from "@/lib/visit";
+import { sendMetaEventForVisit } from "@/lib/meta";
 
 export const runtime = "nodejs";
 
@@ -8,7 +9,19 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const id = Number(body.id || 0);
-    if (id > 0) markDownloaded(id);
+    if (id > 0) {
+      markDownloaded(id);
+      void sendMetaEventForVisit({
+        visitId: id,
+        eventName: "Lead",
+        eventId: String(body.eventId || `lead_${id}`),
+        headers: req.headers,
+        eventSourceUrl: String(body.url || ""),
+        fbp: body.fbp,
+        fbc: body.fbc,
+        fbclid: body.fbclid,
+      });
+    }
   } catch {}
   return NextResponse.json({ ok: true });
 }

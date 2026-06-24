@@ -20,6 +20,15 @@ export interface LandingRoute {
   cloak_decoy_title: string;
   cloak_decoy_image_path: string;
   cloak_decoy_apk_url: string;
+  meta_enabled: number;
+  meta_pixel_id: string;
+  meta_capi_token: string;
+  meta_test_event_code: string;
+  meta_currency: string;
+  meta_value: number;
+  meta_page_view_enabled: number;
+  meta_view_content_enabled: number;
+  meta_lead_enabled: number;
   enabled: number;
   created_at: string;
   updated_at: string;
@@ -100,6 +109,7 @@ function migrateBeforeSchema(db: Database.Database) {
     if (!hasColumn(db, "landing_routes", "external_url")) {
       db.exec("ALTER TABLE landing_routes ADD COLUMN external_url TEXT DEFAULT ''");
     }
+    ensureLandingRouteMetaColumns(db);
     if (columnIsNotNull(db, "landing_routes", "exit_domain")) {
       rebuildLandingRoutesForExternalTargets(db);
     }
@@ -133,11 +143,42 @@ function migrateAfterSchema(db: Database.Database) {
   if (!hasColumn(db, "landing_routes", "external_url")) {
     db.exec("ALTER TABLE landing_routes ADD COLUMN external_url TEXT DEFAULT ''");
   }
+  ensureLandingRouteMetaColumns(db);
   if (columnIsNotNull(db, "landing_routes", "exit_domain")) {
     rebuildLandingRoutesForExternalTargets(db);
   }
   db.exec("CREATE INDEX IF NOT EXISTS idx_landing_routes_entry ON landing_routes(entry_domain)");
   db.exec("CREATE INDEX IF NOT EXISTS idx_landing_routes_exit ON landing_routes(exit_domain)");
+}
+
+function ensureLandingRouteMetaColumns(db: Database.Database) {
+  if (!hasColumn(db, "landing_routes", "meta_enabled")) {
+    db.exec("ALTER TABLE landing_routes ADD COLUMN meta_enabled INTEGER NOT NULL DEFAULT 0");
+  }
+  if (!hasColumn(db, "landing_routes", "meta_pixel_id")) {
+    db.exec("ALTER TABLE landing_routes ADD COLUMN meta_pixel_id TEXT NOT NULL DEFAULT ''");
+  }
+  if (!hasColumn(db, "landing_routes", "meta_capi_token")) {
+    db.exec("ALTER TABLE landing_routes ADD COLUMN meta_capi_token TEXT NOT NULL DEFAULT ''");
+  }
+  if (!hasColumn(db, "landing_routes", "meta_test_event_code")) {
+    db.exec("ALTER TABLE landing_routes ADD COLUMN meta_test_event_code TEXT NOT NULL DEFAULT ''");
+  }
+  if (!hasColumn(db, "landing_routes", "meta_currency")) {
+    db.exec("ALTER TABLE landing_routes ADD COLUMN meta_currency TEXT NOT NULL DEFAULT 'USD'");
+  }
+  if (!hasColumn(db, "landing_routes", "meta_value")) {
+    db.exec("ALTER TABLE landing_routes ADD COLUMN meta_value REAL NOT NULL DEFAULT 0");
+  }
+  if (!hasColumn(db, "landing_routes", "meta_page_view_enabled")) {
+    db.exec("ALTER TABLE landing_routes ADD COLUMN meta_page_view_enabled INTEGER NOT NULL DEFAULT 1");
+  }
+  if (!hasColumn(db, "landing_routes", "meta_view_content_enabled")) {
+    db.exec("ALTER TABLE landing_routes ADD COLUMN meta_view_content_enabled INTEGER NOT NULL DEFAULT 1");
+  }
+  if (!hasColumn(db, "landing_routes", "meta_lead_enabled")) {
+    db.exec("ALTER TABLE landing_routes ADD COLUMN meta_lead_enabled INTEGER NOT NULL DEFAULT 1");
+  }
 }
 
 function rebuildLandingRoutesForExternalTargets(db: Database.Database) {
@@ -147,6 +188,7 @@ function rebuildLandingRoutesForExternalTargets(db: Database.Database) {
   if (!hasColumn(db, "landing_routes", "external_url")) {
     db.exec("ALTER TABLE landing_routes ADD COLUMN external_url TEXT DEFAULT ''");
   }
+  ensureLandingRouteMetaColumns(db);
   db.exec(`
     DROP INDEX IF EXISTS idx_landing_routes_entry;
     DROP INDEX IF EXISTS idx_landing_routes_exit;
@@ -169,6 +211,15 @@ function rebuildLandingRoutesForExternalTargets(db: Database.Database) {
       cloak_decoy_title      TEXT NOT NULL DEFAULT '下载',
       cloak_decoy_image_path TEXT NOT NULL DEFAULT '',
       cloak_decoy_apk_url    TEXT NOT NULL DEFAULT '',
+      meta_enabled           INTEGER NOT NULL DEFAULT 0,
+      meta_pixel_id          TEXT NOT NULL DEFAULT '',
+      meta_capi_token        TEXT NOT NULL DEFAULT '',
+      meta_test_event_code   TEXT NOT NULL DEFAULT '',
+      meta_currency          TEXT NOT NULL DEFAULT 'USD',
+      meta_value             REAL NOT NULL DEFAULT 0,
+      meta_page_view_enabled INTEGER NOT NULL DEFAULT 1,
+      meta_view_content_enabled INTEGER NOT NULL DEFAULT 1,
+      meta_lead_enabled      INTEGER NOT NULL DEFAULT 1,
       enabled                INTEGER NOT NULL DEFAULT 1,
       created_at             TEXT NOT NULL DEFAULT (datetime('now','localtime')),
       updated_at             TEXT NOT NULL DEFAULT (datetime('now','localtime'))
@@ -178,7 +229,9 @@ function rebuildLandingRoutesForExternalTargets(db: Database.Database) {
       id, name, entry_domain, exit_domain, real_target_type, external_url,
       title, image_path, apk_url, auto_download, cloak_enabled, cloak_threshold,
       cloak_token_hours, cloak_decoy_title, cloak_decoy_image_path,
-      cloak_decoy_apk_url, enabled, created_at, updated_at
+      cloak_decoy_apk_url, meta_enabled, meta_pixel_id, meta_capi_token,
+      meta_test_event_code, meta_currency, meta_value, meta_page_view_enabled,
+      meta_view_content_enabled, meta_lead_enabled, enabled, created_at, updated_at
     )
     SELECT
       id, name, entry_domain, NULLIF(exit_domain, ''),
@@ -186,7 +239,17 @@ function rebuildLandingRoutesForExternalTargets(db: Database.Database) {
       COALESCE(external_url, ''),
       title, image_path, apk_url, auto_download, cloak_enabled, cloak_threshold,
       cloak_token_hours, cloak_decoy_title, cloak_decoy_image_path,
-      cloak_decoy_apk_url, enabled, created_at, updated_at
+      cloak_decoy_apk_url,
+      COALESCE(meta_enabled, 0),
+      COALESCE(meta_pixel_id, ''),
+      COALESCE(meta_capi_token, ''),
+      COALESCE(meta_test_event_code, ''),
+      COALESCE(meta_currency, 'USD'),
+      COALESCE(meta_value, 0),
+      COALESCE(meta_page_view_enabled, 1),
+      COALESCE(meta_view_content_enabled, 1),
+      COALESCE(meta_lead_enabled, 1),
+      enabled, created_at, updated_at
     FROM landing_routes_old_target_migration;
 
     DROP TABLE landing_routes_old_target_migration;

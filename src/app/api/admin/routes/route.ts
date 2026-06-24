@@ -21,6 +21,15 @@ const FIELDS = [
   "cloak_decoy_title",
   "cloak_decoy_image_path",
   "cloak_decoy_apk_url",
+  "meta_enabled",
+  "meta_pixel_id",
+  "meta_capi_token",
+  "meta_test_event_code",
+  "meta_currency",
+  "meta_value",
+  "meta_page_view_enabled",
+  "meta_view_content_enabled",
+  "meta_lead_enabled",
   "enabled",
 ] as const;
 
@@ -31,6 +40,10 @@ const NUMERIC = new Set<Field>([
   "cloak_enabled",
   "cloak_threshold",
   "cloak_token_hours",
+  "meta_enabled",
+  "meta_page_view_enabled",
+  "meta_view_content_enabled",
+  "meta_lead_enabled",
   "enabled",
 ]);
 
@@ -67,14 +80,22 @@ function cleanBody(body: any) {
   } else {
     out.external_url = "";
   }
+  out.meta_pixel_id = String(out.meta_pixel_id || "").trim();
+  out.meta_capi_token = String(out.meta_capi_token || "").trim();
+  out.meta_test_event_code = String(out.meta_test_event_code || "").trim();
+  out.meta_currency = String(out.meta_currency || "USD").trim().toUpperCase() || "USD";
   out.title = out.title || "下载";
   out.cloak_threshold = Math.max(1, Number(out.cloak_threshold || 8));
   out.cloak_token_hours = Math.max(1, Number(out.cloak_token_hours || 6));
+  out.meta_value = Number(out.meta_value || 0);
   return out;
 }
 
 function validateRoute(row: Record<string, string | number>): string | null {
   if (!row.entry_domain) return "入口域名不能为空";
+  if (Number(row.meta_enabled || 0) === 1 && !String(row.meta_pixel_id || "").trim()) {
+    return "开启 Facebook 事件时像素 ID 不能为空";
+  }
   if (row.real_target_type === "external") {
     if (!row.external_url) return "外部网站 URL 不能为空";
     try {
@@ -105,9 +126,16 @@ export async function GET() {
       ORDER BY r.id DESC
     `
     )
-    .all();
+    .all() as any[];
 
-  return NextResponse.json({ ok: true, rows });
+  return NextResponse.json({
+    ok: true,
+    rows: rows.map(({ meta_capi_token, ...rest }) => ({
+      ...rest,
+      meta_capi_token: "",
+      meta_capi_token_set: !!meta_capi_token,
+    })),
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -128,11 +156,15 @@ export async function POST(req: NextRequest) {
         INSERT INTO landing_routes (
           name, entry_domain, exit_domain, real_target_type, external_url, title, image_path, apk_url, auto_download,
           cloak_enabled, cloak_threshold, cloak_token_hours,
-          cloak_decoy_title, cloak_decoy_image_path, cloak_decoy_apk_url, enabled
+          cloak_decoy_title, cloak_decoy_image_path, cloak_decoy_apk_url,
+          meta_enabled, meta_pixel_id, meta_capi_token, meta_test_event_code, meta_currency, meta_value,
+          meta_page_view_enabled, meta_view_content_enabled, meta_lead_enabled, enabled
         ) VALUES (
           @name, @entry_domain, NULLIF(@exit_domain, ''), @real_target_type, @external_url, @title, @image_path, @apk_url, @auto_download,
           @cloak_enabled, @cloak_threshold, @cloak_token_hours,
-          @cloak_decoy_title, @cloak_decoy_image_path, @cloak_decoy_apk_url, @enabled
+          @cloak_decoy_title, @cloak_decoy_image_path, @cloak_decoy_apk_url,
+          @meta_enabled, @meta_pixel_id, @meta_capi_token, @meta_test_event_code, @meta_currency, @meta_value,
+          @meta_page_view_enabled, @meta_view_content_enabled, @meta_lead_enabled, @enabled
         )
       `
       ).run(row);
@@ -160,6 +192,15 @@ export async function POST(req: NextRequest) {
           cloak_decoy_title=@cloak_decoy_title,
           cloak_decoy_image_path=@cloak_decoy_image_path,
           cloak_decoy_apk_url=@cloak_decoy_apk_url,
+          meta_enabled=@meta_enabled,
+          meta_pixel_id=@meta_pixel_id,
+          meta_capi_token=COALESCE(NULLIF(@meta_capi_token, ''), meta_capi_token),
+          meta_test_event_code=@meta_test_event_code,
+          meta_currency=@meta_currency,
+          meta_value=@meta_value,
+          meta_page_view_enabled=@meta_page_view_enabled,
+          meta_view_content_enabled=@meta_view_content_enabled,
+          meta_lead_enabled=@meta_lead_enabled,
           enabled=@enabled,
           updated_at=datetime('now','localtime')
         WHERE id=@id

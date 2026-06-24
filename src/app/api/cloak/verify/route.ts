@@ -10,6 +10,7 @@ import {
 import { getCloakThreshold, getCloakTokenHours, routeCloakThreshold, routeCloakTokenHours } from "@/lib/cloak";
 import { getClientIp, recordVisitFast } from "@/lib/visit";
 import { getPromoForRoute, getRouteById, type LandingRoute } from "@/lib/db";
+import { sendMetaEvent } from "@/lib/meta";
 
 export const runtime = "nodejs";
 
@@ -210,6 +211,7 @@ export async function POST(req: NextRequest) {
   const ip = getClientIp(req.headers);
   const clientKey = getClientTokenKey(req.headers, ip);
   const promo = String(req.nextUrl.searchParams.get("c") || "").trim();
+  const fbclid = String(req.nextUrl.searchParams.get("fbclid") || "").trim();
   let target = "";
   let visitId = 0;
   if (human && route) {
@@ -228,7 +230,17 @@ export async function POST(req: NextRequest) {
     } catch {
       // 记录失败不影响真人放行
     }
-    target = buildRealTargetUrl(route, req.headers, effectivePromo, visitId);
+    target = buildRealTargetUrl(route, req.headers, effectivePromo, visitId, fbclid);
+    if (route.real_target_type === "external" && visitId) {
+      void sendMetaEvent({
+        route,
+        eventName: "ViewContent",
+        eventId: `vc_${visitId}`,
+        headers: req.headers,
+        eventSourceUrl: target,
+        fbclid,
+      });
+    }
   }
 
   const res = NextResponse.json({
@@ -271,10 +283,11 @@ function realTargetLabel(route: LandingRoute): string {
   return route.real_target_type === "external" ? route.external_url : route.exit_domain || "";
 }
 
-function buildRealTargetUrl(route: LandingRoute, headers: Headers, promo: string, visitId: number): string {
+function buildRealTargetUrl(route: LandingRoute, headers: Headers, promo: string, visitId: number, fbclid: string): string {
   if (route.real_target_type === "external") {
     const target = new URL(route.external_url);
     if (promo) target.searchParams.set("c", promo);
+    if (fbclid) target.searchParams.set("fbclid", fbclid);
     return target.toString();
   }
 
@@ -282,6 +295,7 @@ function buildRealTargetUrl(route: LandingRoute, headers: Headers, promo: string
   const target = new URL(`https://${route.exit_domain}/`);
   if (promo) target.searchParams.set("c", promo);
   if (visitId) target.searchParams.set("v", String(visitId));
+  if (fbclid) target.searchParams.set("fbclid", fbclid);
   target.searchParams.set("ht", buildExitTransferToken(route, headers));
   return target.toString();
 }

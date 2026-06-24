@@ -222,3 +222,42 @@ export function updateVisitClient(
 export function markDownloaded(id: number) {
   getDb().prepare("UPDATE visits SET downloaded = 1 WHERE id = ?").run(id);
 }
+
+export interface VisitRow {
+  id: number;
+  route_id: number | null;
+  promo_code: string;
+  page_variant: string;
+  cloak_reason: string;
+  entry_domain: string;
+  exit_domain: string;
+  ip: string;
+  ip_source: string;
+  cf_ray: string;
+  country: string;
+  province: string;
+  city: string;
+  isp: string;
+  os: string;
+  os_version: string;
+  device: string;
+  browser: string;
+  language: string;
+  referer: string;
+  screen: string;
+  timezone: string;
+  network: string;
+  fingerprint: string;
+  is_mobile: number;
+  downloaded: number;
+  user_agent: string;
+  created_at: string;
+}
+
+export function getVisitById(id: number): VisitRow | null {
+  if (!id) return null;
+  const row = getDb()
+    .prepare("SELECT * FROM visits WHERE id = ? LIMIT 1")
+    .get(id) as VisitRow | undefined;
+  return row || null;
+}

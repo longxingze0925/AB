@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { updateVisitClient } from "@/lib/visit";
+import { sendMetaEventForVisit } from "@/lib/meta";
 
 export const runtime = "nodejs";
 
@@ -14,6 +15,16 @@ export async function POST(req: NextRequest) {
         timezone: body.timezone,
         network: body.network,
         fingerprint: body.fingerprint,
+      });
+      void sendMetaEventForVisit({
+        visitId: id,
+        eventName: "ViewContent",
+        eventId: String(body.eventId || `vc_${id}`),
+        headers: req.headers,
+        eventSourceUrl: String(body.url || ""),
+        fbp: body.fbp,
+        fbc: body.fbc,
+        fbclid: body.fbclid,
       });
     }
   } catch {

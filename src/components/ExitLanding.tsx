@@ -2,12 +2,23 @@
 
 import { useCallback, useEffect, useRef } from "react";
 
+interface MetaBrowserConfig {
+  pixelId: string;
+  testEventCode: string;
+  currency: string;
+  value: number;
+  pageViewEnabled: boolean;
+  viewContentEnabled: boolean;
+  leadEnabled: boolean;
+}
+
 interface Props {
   apkUrl: string;
   imageUrl: string;
   title: string;
   autoDownload: boolean;
   promo: string;
+  meta?: MetaBrowserConfig | null;
 }
 
 // 轻量设备指纹:综合屏幕/时区/UA/canvas 生成稳定字符串
@@ -40,9 +51,52 @@ function buildFingerprint(): string {
   return Math.abs(h).toString(16);
 }
 
-export default function ExitLanding({ apkUrl, imageUrl, title, autoDownload, promo }: Props) {
+function ensureMetaPixel(pixelId: string) {
+  const w = window as any;
+  if (!w.fbq) {
+    const fbq = function (...args: unknown[]) {
+      if (fbq.callMethod) fbq.callMethod.apply(fbq, args);
+      else fbq.queue.push(args);
+    } as any;
+    fbq.queue = [];
+    fbq.loaded = true;
+    fbq.version = "2.0";
+    w.fbq = fbq;
+    w._fbq = fbq;
+
+    const script = document.createElement("script");
+    script.async = true;
+    script.src = "https://connect.facebook.net/en_US/fbevents.js";
+    document.head.appendChild(script);
+  }
+  if (!w.__metaPixelInited) w.__metaPixelInited = {};
+  if (!w.__metaPixelInited[pixelId]) {
+    w.fbq("init", pixelId);
+    w.__metaPixelInited[pixelId] = true;
+  }
+}
+
+function trackMetaEvent(meta: MetaBrowserConfig | null | undefined, eventName: string, eventId: string) {
+  if (!meta?.pixelId) return;
+  ensureMetaPixel(meta.pixelId);
+  const customData: Record<string, string | number> = {
+    currency: meta.currency || "USD",
+  };
+  if (meta.value > 0) customData.value = meta.value;
+  (window as any).fbq("track", eventName, customData, { eventID: eventId });
+}
+
+function getMetaCookie(name: string): string {
+  const prefix = `${name}=`;
+  const part = document.cookie.split(";").map((item) => item.trim()).find((item) => item.startsWith(prefix));
+  return part ? decodeURIComponent(part.slice(prefix.length)) : "";
+}
+
+export default function ExitLanding({ apkUrl, imageUrl, title, autoDownload, promo, meta }: Props) {
   const started = useRef(false);
   const collected = useRef(false);
+  const metaTracked = useRef(false);
+  const downloadMarked = useRef(false);
   const downloadFrames = useRef<HTMLIFrameElement[]>([]);
   const cleanupTimers = useRef<number[]>([]);
 
@@ -54,9 +108,18 @@ export default function ExitLanding({ apkUrl, imageUrl, title, autoDownload, pro
 
   const markDownloaded = useCallback((visitId: number) => {
     if (!visitId) return;
+    if (downloadMarked.current) return;
+    downloadMarked.current = true;
     navigator.sendBeacon?.(
       "/api/downloaded",
-      new Blob([JSON.stringify({ id: visitId })], { type: "application/json" })
+      new Blob([JSON.stringify({
+        id: visitId,
+        eventId: `lead_${visitId}`,
+        fbp: getMetaCookie("_fbp"),
+        fbc: getMetaCookie("_fbc"),
+        fbclid: new URLSearchParams(window.location.search).get("fbclid") || "",
+        url: window.location.href,
+      })], { type: "application/json" })
     );
   }, []);
 
@@ -64,7 +127,10 @@ export default function ExitLanding({ apkUrl, imageUrl, title, autoDownload, pro
     if (!apkUrl) return;
 
     const visitId = getVisitId();
-    if (countDownload) markDownloaded(visitId);
+    if (countDownload) {
+      if (visitId && meta?.leadEnabled) trackMetaEvent(meta, "Lead", `lead_${visitId}`);
+      markDownloaded(visitId);
+    }
 
     const iframe = document.createElement("iframe");
     iframe.src = apkUrl;
@@ -80,7 +146,7 @@ export default function ExitLanding({ apkUrl, imageUrl, title, autoDownload, pro
       cleanupTimers.current = cleanupTimers.current.filter((item) => item !== timer);
     }, 15000);
     cleanupTimers.current.push(timer);
-  }, [apkUrl, getVisitId, markDownloaded]);
+  }, [apkUrl, getVisitId, markDownloaded, meta]);
 
   useEffect(() => {
     if (collected.current) return;
@@ -94,6 +160,11 @@ export default function ExitLanding({ apkUrl, imageUrl, title, autoDownload, pro
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "",
       network: conn ? conn.effectiveType || "" : "",
       fingerprint: buildFingerprint(),
+      eventId: `vc_${getVisitId()}`,
+      fbp: getMetaCookie("_fbp"),
+      fbc: getMetaCookie("_fbc"),
+      fbclid: new URLSearchParams(window.location.search).get("fbclid") || "",
+      url: window.location.href,
     };
 
     // 回填客户端采集信息(瞬间执行,无感)
@@ -101,11 +172,20 @@ export default function ExitLanding({ apkUrl, imageUrl, title, autoDownload, pro
   }, [getVisitId, promo]);
 
   useEffect(() => {
+    if (metaTracked.current || !meta?.pixelId) return;
+    metaTracked.current = true;
+    const visitId = getVisitId();
+    if (!visitId) return;
+    if (meta.pageViewEnabled) trackMetaEvent(meta, "PageView", `pv_${visitId}`);
+    if (meta.viewContentEnabled) trackMetaEvent(meta, "ViewContent", `vc_${visitId}`);
+  }, [getVisitId, meta]);
+
+  useEffect(() => {
     if (started.current || !autoDownload || !apkUrl) return;
     started.current = true;
 
     // 贴近 smcy.shop：页面挂载后延迟尝试打开中转下载页；浏览器拦截时由用户点击兜底。
-    const t = setTimeout(() => triggerDownload(false), 1000);
+    const t = setTimeout(() => triggerDownload(true), 1000);
     return () => clearTimeout(t);
   }, [apkUrl, autoDownload, triggerDownload]);
 

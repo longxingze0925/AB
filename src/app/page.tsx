@@ -8,6 +8,8 @@ import {
 } from "@/lib/db";
 import { getClientIp, recordVisitFast } from "@/lib/visit";
 import ExitLanding from "@/components/ExitLanding";
+import { getMetaBrowserConfig } from "@/lib/meta-config";
+import { sendMetaEvent } from "@/lib/meta";
 import {
   classifyServerSync,
   routeCloakEnabled,
@@ -33,8 +35,8 @@ function getHost(h: Headers): string {
 }
 
 // 探针 JS（移植自 cloak-router/templates.go loadingTmpl）
-function ProbePage({ routeId, promo }: { routeId: number; promo: string }) {
-  const verifyUrl = `/api/cloak/verify?route=${routeId}${promo ? `&c=${encodeURIComponent(promo)}` : ""}`;
+function ProbePage({ routeId, promo, fbclid }: { routeId: number; promo: string; fbclid: string }) {
+  const verifyUrl = `/api/cloak/verify?route=${routeId}${promo ? `&c=${encodeURIComponent(promo)}` : ""}${fbclid ? `&fbclid=${encodeURIComponent(fbclid)}` : ""}`;
   const script = `
 (async function(){
   function webglVendor(){
@@ -107,11 +109,12 @@ function ProbePage({ routeId, promo }: { routeId: number; promo: string }) {
 export default async function Page({
   searchParams,
 }: {
-  searchParams: { c?: string; ht?: string };
+  searchParams: { c?: string; ht?: string; fbclid?: string };
 }) {
   const h = headers();
   const host = getHost(h);
   const promo = (searchParams.c || "").trim();
+  const fbclid = (searchParams.fbclid || "").trim();
   const transferToken = (searchParams.ht || "").trim();
 
   // ---- 主域名:进后台 ----
@@ -135,7 +138,7 @@ export default async function Page({
     }
   }
 
-  const cloakResult = exitRoute ? null : await guardRouteCloak(route, h, promo);
+  const cloakResult = exitRoute ? null : await guardRouteCloak(route, h, promo, fbclid);
   if (cloakResult) return cloakResult;
 
   if (exitRoute) {
@@ -147,6 +150,7 @@ export default async function Page({
         title={exitRoute.title || "下载"}
         autoDownload={exitRoute.auto_download === 1}
         promo={promoRow ? promoRow.code : promo}
+        meta={getMetaBrowserConfig(exitRoute)}
       />
     );
   }
@@ -169,7 +173,17 @@ export default async function Page({
   } catch {
     // 记录失败不阻塞跳转
   }
-  const target = buildRealTargetUrl(route, h, effectivePromo, visitId);
+  const target = buildRealTargetUrl(route, h, effectivePromo, visitId, fbclid);
+  if (route.real_target_type === "external" && visitId) {
+    void sendMetaEvent({
+      route,
+      eventName: "ViewContent",
+      eventId: `vc_${visitId}`,
+      headers: h,
+      eventSourceUrl: target.toString(),
+      fbclid,
+    });
+  }
   redirect(target.toString());
 }
 
@@ -177,10 +191,11 @@ function realTargetLabel(route: LandingRoute): string {
   return route.real_target_type === "external" ? route.external_url : route.exit_domain || "";
 }
 
-function buildRealTargetUrl(route: LandingRoute, h: Headers, promo: string, visitId: number): URL {
+function buildRealTargetUrl(route: LandingRoute, h: Headers, promo: string, visitId: number, fbclid: string): URL {
   if (route.real_target_type === "external") {
     const target = new URL(route.external_url);
     if (promo) target.searchParams.set("c", promo);
+    if (fbclid) target.searchParams.set("fbclid", fbclid);
     return target;
   }
 
@@ -188,6 +203,7 @@ function buildRealTargetUrl(route: LandingRoute, h: Headers, promo: string, visi
   const target = new URL(`https://${route.exit_domain}/`);
   if (promo) target.searchParams.set("c", promo);
   if (visitId) target.searchParams.set("v", String(visitId));
+  if (fbclid) target.searchParams.set("fbclid", fbclid);
   if (routeCloakEnabled(route)) {
     target.searchParams.set("ht", buildExitTransferToken(route, h));
   }
@@ -214,7 +230,8 @@ function exitTransferScope(route: LandingRoute): string {
 async function guardRouteCloak(
   route: LandingRoute,
   h: Headers,
-  promo: string
+  promo: string,
+  fbclid: string
 ) {
   if (!routeCloakEnabled(route)) return null;
 
@@ -239,7 +256,7 @@ async function guardRouteCloak(
   }
 
   await recordRouteVariant(route, "probe", "需 JS 探针确认", h, promo);
-  return <ProbePage routeId={route.id} promo={promo} />;
+  return <ProbePage routeId={route.id} promo={promo} fbclid={fbclid} />;
 }
 
 async function recordRouteVariant(

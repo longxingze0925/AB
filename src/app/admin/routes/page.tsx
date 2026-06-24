@@ -19,6 +19,16 @@ interface LandingRoute {
   cloak_decoy_title: string;
   cloak_decoy_image_path: string;
   cloak_decoy_apk_url: string;
+  meta_enabled: number;
+  meta_pixel_id: string;
+  meta_capi_token: string;
+  meta_capi_token_set?: boolean;
+  meta_test_event_code: string;
+  meta_currency: string;
+  meta_value: number;
+  meta_page_view_enabled: number;
+  meta_view_content_enabled: number;
+  meta_lead_enabled: number;
   enabled: number;
   visits: number;
   downloads: number;
@@ -55,6 +65,15 @@ const blank: FormState = {
   cloak_decoy_title: "下载",
   cloak_decoy_image_path: "",
   cloak_decoy_apk_url: "",
+  meta_enabled: 0,
+  meta_pixel_id: "",
+  meta_capi_token: "",
+  meta_test_event_code: "",
+  meta_currency: "USD",
+  meta_value: 0,
+  meta_page_view_enabled: 1,
+  meta_view_content_enabled: 1,
+  meta_lead_enabled: 1,
   enabled: 1,
 };
 
@@ -225,7 +244,7 @@ export default function RoutesPage() {
         <table className="admin-table">
           <thead>
             <tr>
-              {["状态", "线路", "入口域名", "真用户去向", "访问", "下载", "落地页", "分流", "推广码", "操作"].map((h) => (
+              {["状态", "线路", "入口域名", "真用户去向", "访问", "下载", "落地页", "分流", "Facebook", "推广码", "操作"].map((h) => (
                 <th key={h}>{h}</th>
               ))}
             </tr>
@@ -260,6 +279,14 @@ export default function RoutesPage() {
                   <td>{r.cloak_enabled ? <Badge variant="primary" label="开启" /> : <Badge variant="muted" label="关闭" />}</td>
                   <td>
                     <div className="admin-btn-row">
+                      {r.meta_enabled ? <Badge variant="primary" label="开启" /> : <Badge variant="muted" label="关闭" />}
+                      {r.meta_enabled ? (
+                        r.meta_capi_token_set ? <Badge variant="success" label="Token 已配置" /> : <Badge variant="warning" label="Token 未填" />
+                      ) : null}
+                    </div>
+                  </td>
+                  <td>
+                    <div className="admin-btn-row">
                       {link ? <button onClick={() => navigator.clipboard.writeText(link)} className="admin-btn">复制入口</button> : null}
                       <button onClick={() => openPromos(r)} className="admin-btn">推广码</button>
                     </div>
@@ -275,7 +302,7 @@ export default function RoutesPage() {
               );
             })}
             {rows.length === 0 && (
-              <tr><td colSpan={10} className="admin-empty">暂无线路</td></tr>
+              <tr><td colSpan={11} className="admin-empty">暂无线路</td></tr>
             )}
           </tbody>
         </table>
@@ -373,6 +400,53 @@ export default function RoutesPage() {
                 </Field>
               </div>
               <ImageUpload label="假页面图片" value={form.cloak_decoy_image_path} onPick={(file) => upload(file, "cloak_decoy_image_path")} onClear={() => set("cloak_decoy_image_path", "")} />
+            </Section>
+
+            <Section title="Facebook 事件">
+              <div className="admin-form-grid">
+                <Field label="启用 Facebook 事件">
+                  <select value={form.meta_enabled} onChange={(e) => set("meta_enabled", Number(e.target.value))} className="admin-input">
+                    <option value={0}>关闭</option>
+                    <option value={1}>开启</option>
+                  </select>
+                </Field>
+                <Field label="Pixel ID">
+                  <input value={form.meta_pixel_id} onChange={(e) => set("meta_pixel_id", e.target.value)} className="admin-input" placeholder="输入 Pixel ID" />
+                </Field>
+                <Field label="CAPI Token">
+                  <input type="password" value={form.meta_capi_token} onChange={(e) => set("meta_capi_token", e.target.value)} className="admin-input" placeholder="留空表示不改当前 Token" />
+                </Field>
+                <Field label="测试事件码">
+                  <input value={form.meta_test_event_code} onChange={(e) => set("meta_test_event_code", e.target.value)} className="admin-input" placeholder="测试阶段填写，正式上线清空" />
+                </Field>
+                <Field label="默认币种">
+                  <input value={form.meta_currency} onChange={(e) => set("meta_currency", e.target.value.toUpperCase())} className="admin-input" placeholder="USD" />
+                </Field>
+                <Field label="默认价值">
+                  <input type="number" step="0.01" min="0" value={form.meta_value} onChange={(e) => set("meta_value", Number(e.target.value))} className="admin-input" />
+                </Field>
+                <Field label="PageView">
+                  <select value={form.meta_page_view_enabled} onChange={(e) => set("meta_page_view_enabled", Number(e.target.value))} className="admin-input">
+                    <option value={1}>开启</option>
+                    <option value={0}>关闭</option>
+                  </select>
+                </Field>
+                <Field label="ViewContent">
+                  <select value={form.meta_view_content_enabled} onChange={(e) => set("meta_view_content_enabled", Number(e.target.value))} className="admin-input">
+                    <option value={1}>开启</option>
+                    <option value={0}>关闭</option>
+                  </select>
+                </Field>
+                <Field label="Lead">
+                  <select value={form.meta_lead_enabled} onChange={(e) => set("meta_lead_enabled", Number(e.target.value))} className="admin-input">
+                    <option value={1}>开启</option>
+                    <option value={0}>关闭</option>
+                  </select>
+                </Field>
+              </div>
+              <div className="admin-muted" style={{ marginTop: 10, fontSize: 13 }}>
+                Token 只保存到后端，不会回显明文；留空表示更新时保留原 Token。
+              </div>
             </Section>
 
               {error && <p className="admin-alert admin-alert-danger">{error}</p>}
