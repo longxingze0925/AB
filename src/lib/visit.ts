@@ -67,6 +67,27 @@ export async function getGeo(ip: string, headers: Headers) {
   };
 }
 
+type GeoInfo = Awaited<ReturnType<typeof getGeo>>;
+
+function fallbackGeo(headers: Headers): GeoInfo {
+  return {
+    country: headers.get("cf-ipcountry") || "",
+    province: "",
+    city: "",
+    isp: "",
+  };
+}
+
+async function lookupGeoWithFallback(ip: string, fallbackCountry: string): Promise<GeoInfo> {
+  const r = await lookupGeo(ip);
+  return {
+    country: r.country || fallbackCountry || "",
+    province: r.province || "",
+    city: r.city || "",
+    isp: r.isp || "",
+  };
+}
+
 export interface VisitInput {
   route_id?: number;
   promo_code: string;
@@ -81,34 +102,47 @@ export interface PreparedVisit {
   ipInfo: ClientIpInfo;
   ua: string;
   uaInfo: ReturnType<typeof parseUa>;
-  geo: Awaited<ReturnType<typeof getGeo>>;
+  geo: GeoInfo;
   language: string;
   referer: string;
   cfRay: string;
 }
 
-// 提前准备访问记录里的派生字段。页面类型和分流原因出来后再写入,字段不减少。
-export async function prepareVisit(input: Pick<VisitInput, "headers">): Promise<PreparedVisit> {
+// 快速准备访问记录字段。Geo 精细字段后台回填，不阻塞入口/verify 响应。
+export function prepareVisitFast(input: Pick<VisitInput, "headers">): PreparedVisit {
   const { headers } = input;
   const ua = headers.get("user-agent") || "";
   const ipInfo = getClientIpInfo(headers);
   const uaInfo = parseUa(ua);
-  const geo = await getGeo(ipInfo.ip, headers);
 
   return {
     ipInfo,
     ua,
     uaInfo,
-    geo,
+    geo: fallbackGeo(headers),
     language: headers.get("accept-language")?.split(",")[0] || "",
     referer: headers.get("referer") || "",
     cfRay: headers.get("cf-ray") || "",
   };
 }
 
+// 提前准备访问记录里的派生字段。页面类型和分流原因出来后再写入,字段不减少。
+export async function prepareVisit(input: Pick<VisitInput, "headers">): Promise<PreparedVisit> {
+  const prepared = prepareVisitFast(input);
+  prepared.geo = await getGeo(prepared.ipInfo.ip, input.headers);
+  return prepared;
+}
+
 // 服务端首次记录访问,返回 visitId(供客户端后续回填屏幕/指纹等)
 export async function recordVisit(input: VisitInput): Promise<number> {
-  return recordPreparedVisit(input, await prepareVisit(input));
+  return recordVisitFast(input);
+}
+
+export function recordVisitFast(input: VisitInput): number {
+  const prepared = prepareVisitFast(input);
+  const id = recordPreparedVisit(input, prepared);
+  enrichVisitGeo(id, prepared.ipInfo.ip, prepared.geo.country);
+  return id;
 }
 
 export function recordPreparedVisit(input: VisitInput, prepared: PreparedVisit): number {
@@ -149,6 +183,21 @@ export function recordPreparedVisit(input: VisitInput, prepared: PreparedVisit):
   });
 
   return Number(info.lastInsertRowid);
+}
+
+export function enrichVisitGeo(id: number, ip: string, fallbackCountry = "") {
+  if (!id || !ip) return;
+  void lookupGeoWithFallback(ip, fallbackCountry)
+    .then((geo) => {
+      getDb()
+        .prepare(
+          "UPDATE visits SET country=@country, province=@province, city=@city, isp=@isp WHERE id=@id"
+        )
+        .run({ id, ...geo });
+    })
+    .catch(() => {
+      // Geo 回填失败不影响分流和访问记录。
+    });
 }
 
 // 客户端回填:屏幕/时区/网络/指纹

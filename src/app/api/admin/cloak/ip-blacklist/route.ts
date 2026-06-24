@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { requireAuth } from "@/lib/guard";
 import { parseCidr } from "@/lib/ip";
+import { refreshIpBlacklistCache } from "@/lib/cloak";
 
 export const runtime = "nodejs";
 
@@ -33,8 +34,10 @@ export async function POST(req: NextRequest) {
         cidr,
         body.note || ""
       );
+      refreshIpBlacklistCache();
     } else if (body.action === "delete") {
       db.prepare("DELETE FROM ip_blacklist WHERE id = ?").run(Number(body.id));
+      refreshIpBlacklistCache();
     } else {
       return NextResponse.json({ ok: false, error: "未知操作" }, { status: 400 });
     }

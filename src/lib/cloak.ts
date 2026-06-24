@@ -50,7 +50,7 @@ let _asnLoaded = false;
 let _asn4: AsnTable | null = null;
 let _asn6: AsnTable | null = null;
 
-function loadAsnForCloak() {
+export function loadAsnForCloak() {
   if (_asnLoaded) return;
   _asnLoaded = true;
   try {
@@ -235,14 +235,41 @@ export interface ServerVerdict {
   headerScore: number;
 }
 
-// 检查 IP 是否命中黑名单（支持 IPv4 / IPv6 / CIDR）
-export function isBlacklisted(ip: string): boolean {
-  const db = getDb();
-  const rows = db.prepare("SELECT cidr FROM ip_blacklist").all() as { cidr: string }[];
-  return rows.some(({ cidr }) => ipMatchesCidr(ip, cidr));
+let ipBlacklistCache: string[] | null = null;
+let cloakPrewarmStarted = false;
+
+export function refreshIpBlacklistCache(): string[] {
+  try {
+    ipBlacklistCache = (getDb().prepare("SELECT cidr FROM ip_blacklist").all() as { cidr: string }[])
+      .map((row) => row.cidr)
+      .filter(Boolean);
+  } catch {
+    ipBlacklistCache = [];
+  }
+  return ipBlacklistCache;
 }
 
-// classifyServer：同步部分（UA + ASN + IP黑名单），PTR 是异步的单独调用
+// 检查 IP 是否命中黑名单（支持 IPv4 / IPv6 / CIDR）
+export function isBlacklisted(ip: string): boolean {
+  const cidrs = ipBlacklistCache ?? refreshIpBlacklistCache();
+  return cidrs.some((cidr) => ipMatchesCidr(ip, cidr));
+}
+
+export function prewarmCloak() {
+  if (cloakPrewarmStarted) return;
+  cloakPrewarmStarted = true;
+  setTimeout(() => {
+    try {
+      loadAsnForCloak();
+      refreshIpBlacklistCache();
+    } catch {
+      // 预热失败时后续请求仍会按需加载。
+      cloakPrewarmStarted = false;
+    }
+  }, 0);
+}
+
+// classifyServer：同步硬拦截（UA + ASN + IP黑名单），不等待 PTR。
 export function classifyServerSync(headers: Headers): ServerVerdict {
   const ua = (headers.get("user-agent") || "").toLowerCase();
 
@@ -276,7 +303,7 @@ export function classifyServerSync(headers: Headers): ServerVerdict {
   return { decision: "unknown", reason: "需 JS 探针确认", headerScore: headerScore(headers) };
 }
 
-// classifyServerAsync：加 PTR 反查（慢，异步）
+// classifyServerAsync：完整服务端判断，包含 PTR 反查。
 export async function classifyServerAsync(headers: Headers): Promise<ServerVerdict> {
   const sync = classifyServerSync(headers);
   if (sync.decision === "bot") return sync;

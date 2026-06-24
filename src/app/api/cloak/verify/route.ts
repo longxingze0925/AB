@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { headerScore } from "@/lib/cloak";
-import { getClientTokenKey, issueHumanToken, HUMAN_COOKIE, PROBED_COOKIE } from "@/lib/token";
+import { classifyServerAsync, headerScore } from "@/lib/cloak";
+import {
+  getClientTokenKey,
+  issueHumanToken,
+  issueTransferToken,
+  HUMAN_COOKIE,
+  PROBED_COOKIE,
+} from "@/lib/token";
 import { getCloakThreshold, getCloakTokenHours, routeCloakThreshold, routeCloakTokenHours } from "@/lib/cloak";
-import { getClientIp } from "@/lib/visit";
-import { getRouteById } from "@/lib/db";
+import { getClientIp, recordVisitFast } from "@/lib/visit";
+import { getPromoForRoute, getRouteById, type LandingRoute } from "@/lib/db";
 
 export const runtime = "nodejs";
 
@@ -178,6 +184,7 @@ export async function POST(req: NextRequest) {
   }
 
   const hScore = headerScore(req.headers);
+  const serverVerdict = await classifyServerAsync(req.headers);
   const { score: pScore, hardBot, reason: hardReason } = scoreProbe(
     p,
     req.headers.get("accept-language") || "",
@@ -187,8 +194,12 @@ export async function POST(req: NextRequest) {
   const route = routeId > 0 ? getRouteById(routeId) : null;
   const threshold = route ? routeCloakThreshold(route) : getCloakThreshold();
   const totalScore = hScore + pScore;
-  const human = !hardBot && totalScore >= threshold;
-  const reason = hardBot
+  const human = !!route && serverVerdict.decision !== "bot" && !hardBot && totalScore >= threshold;
+  const reason = serverVerdict.decision === "bot"
+    ? serverVerdict.reason
+    : !route
+    ? "线路不存在"
+    : hardBot
     ? hardReason
     : human
       ? "探针通过"
@@ -198,6 +209,28 @@ export async function POST(req: NextRequest) {
 
   const ip = getClientIp(req.headers);
   const clientKey = getClientTokenKey(req.headers, ip);
+  const promo = String(req.nextUrl.searchParams.get("c") || "").trim();
+  let target = "";
+  let visitId = 0;
+  if (human && route) {
+    const promoRow = promo ? getPromoForRoute(route.id, promo) : null;
+    const effectivePromo = promo && promoRow ? promoRow.code : "";
+    try {
+      visitId = recordVisitFast({
+        route_id: route.id,
+        promo_code: effectivePromo,
+        page_variant: "real",
+        cloak_reason: "探针通过",
+        entry_domain: route.entry_domain,
+        exit_domain: realTargetLabel(route),
+        headers: req.headers,
+      });
+    } catch {
+      // 记录失败不影响真人放行
+    }
+    target = buildRealTargetUrl(route, req.headers, effectivePromo, visitId);
+  }
+
   const res = NextResponse.json({
     human,
     next: human ? "real" : "fake",
@@ -205,6 +238,8 @@ export async function POST(req: NextRequest) {
     score: totalScore,
     headerScore: hScore,
     probeScore: pScore,
+    serverReason: serverVerdict.reason,
+    target,
     threshold,
   });
   const tokenHours = route ? routeCloakTokenHours(route) : getCloakTokenHours();
@@ -230,4 +265,29 @@ export async function POST(req: NextRequest) {
   }
 
   return res;
+}
+
+function realTargetLabel(route: LandingRoute): string {
+  return route.real_target_type === "external" ? route.external_url : route.exit_domain || "";
+}
+
+function buildRealTargetUrl(route: LandingRoute, headers: Headers, promo: string, visitId: number): string {
+  if (route.real_target_type === "external") {
+    const target = new URL(route.external_url);
+    if (promo) target.searchParams.set("c", promo);
+    return target.toString();
+  }
+
+  if (!route.exit_domain) return "/";
+  const target = new URL(`https://${route.exit_domain}/`);
+  if (promo) target.searchParams.set("c", promo);
+  if (visitId) target.searchParams.set("v", String(visitId));
+  target.searchParams.set("ht", buildExitTransferToken(route, headers));
+  return target.toString();
+}
+
+function buildExitTransferToken(route: LandingRoute, headers: Headers): string {
+  const ip = getClientIp(headers);
+  const clientKey = getClientTokenKey(headers, ip);
+  return issueTransferToken(clientKey, 120, `route:${route.id}:exit:${route.exit_domain}`);
 }
