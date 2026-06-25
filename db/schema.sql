@@ -75,6 +75,17 @@ CREATE INDEX IF NOT EXISTS idx_visits_fp      ON visits(fingerprint);
 CREATE INDEX IF NOT EXISTS idx_visits_route   ON visits(route_id);
 CREATE INDEX IF NOT EXISTS idx_promo_codes_route ON promo_codes(route_id);
 
+-- 落地页模板：上传的静态模板包
+CREATE TABLE IF NOT EXISTS landing_templates (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  name        TEXT NOT NULL,
+  storage_key TEXT NOT NULL UNIQUE,
+  entry_file  TEXT NOT NULL DEFAULT 'index.html',
+  file_count  INTEGER NOT NULL DEFAULT 0,
+  size_bytes  INTEGER NOT NULL DEFAULT 0,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+
 -- 线路配置：一条线路 = 入口域名 + 真用户去向(内部出口/外部网站) + 假页面 + 分流设置
 CREATE TABLE IF NOT EXISTS landing_routes (
   id                     INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -83,6 +94,8 @@ CREATE TABLE IF NOT EXISTS landing_routes (
   exit_domain            TEXT UNIQUE DEFAULT NULL,
   real_target_type       TEXT NOT NULL DEFAULT 'internal', -- internal=内部出口落地页, external=外部网站
   external_url           TEXT NOT NULL DEFAULT '',
+  landing_mode           TEXT NOT NULL DEFAULT 'default',  -- default=默认页面, template=自定义模板
+  landing_template_id    INTEGER DEFAULT NULL,
   title                  TEXT NOT NULL DEFAULT '下载',
   image_path             TEXT NOT NULL DEFAULT '', -- 仅支持本地上传路径，如 /uploads/xxx.webp
   apk_url                TEXT NOT NULL DEFAULT '',
@@ -108,6 +121,7 @@ CREATE TABLE IF NOT EXISTS landing_routes (
 );
 CREATE INDEX IF NOT EXISTS idx_landing_routes_entry ON landing_routes(entry_domain);
 CREATE INDEX IF NOT EXISTS idx_landing_routes_exit  ON landing_routes(exit_domain);
+CREATE INDEX IF NOT EXISTS idx_landing_routes_template ON landing_routes(landing_template_id);
 
 -- 分流(cloak)配置：假页面内容 + 判定参数存入 settings 表，键名以 cloak_ 开头
 -- cloak_enabled        : "1"=开启分流, "0"=关闭(所有流量走真实页面)

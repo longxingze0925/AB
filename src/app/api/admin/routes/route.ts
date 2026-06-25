@@ -11,6 +11,8 @@ const FIELDS = [
   "exit_domain",
   "real_target_type",
   "external_url",
+  "landing_mode",
+  "landing_template_id",
   "title",
   "image_path",
   "apk_url",
@@ -65,7 +67,7 @@ function cleanExternalUrl(value: unknown): string {
 }
 
 function cleanBody(body: any) {
-  const out: Record<string, string | number> = {};
+  const out: Record<string, string | number | null> = {};
   for (const field of FIELDS) {
     if (field === "entry_domain" || field === "exit_domain") out[field] = cleanDomain(body[field]);
     else if (field === "real_target_type") out[field] = cleanTargetType(body[field]);
@@ -77,8 +79,15 @@ function cleanBody(body: any) {
   }
   if (out.real_target_type === "external") {
     out.exit_domain = "";
+    out.landing_mode = "default";
+    out.landing_template_id = null;
   } else {
     out.external_url = "";
+  }
+  out.landing_mode = out.landing_mode === "template" ? "template" : "default";
+  out.landing_template_id = Number(out.landing_template_id || 0) || null;
+  if (out.landing_mode === "default") {
+    out.landing_template_id = null;
   }
   out.meta_pixel_id = String(out.meta_pixel_id || "").trim();
   out.meta_capi_token = String(out.meta_capi_token || "").trim();
@@ -91,7 +100,7 @@ function cleanBody(body: any) {
   return out;
 }
 
-function validateRoute(row: Record<string, string | number>): string | null {
+function validateRoute(row: Record<string, string | number | null>): string | null {
   if (!row.entry_domain) return "入口域名不能为空";
   if (Number(row.meta_enabled || 0) === 1 && !String(row.meta_pixel_id || "").trim()) {
     return "开启 Facebook 事件时像素 ID 不能为空";
@@ -108,6 +117,9 @@ function validateRoute(row: Record<string, string | number>): string | null {
     }
     return null;
   }
+  if (row.landing_mode === "template" && !row.landing_template_id) {
+    return "选择模板模式时必须指定模板";
+  }
   if (!row.exit_domain) return "内部出口模式下出口域名不能为空";
   return null;
 }
@@ -120,9 +132,11 @@ export async function GET() {
     .prepare(
       `
       SELECT r.*,
+        t.name AS landing_template_name,
         (SELECT COUNT(*) FROM visits v WHERE v.route_id = r.id) AS visits,
         (SELECT COUNT(*) FROM visits v WHERE v.route_id = r.id AND v.downloaded = 1) AS downloads
       FROM landing_routes r
+      LEFT JOIN landing_templates t ON t.id = r.landing_template_id
       ORDER BY r.id DESC
     `
     )
@@ -154,13 +168,13 @@ export async function POST(req: NextRequest) {
       db.prepare(
         `
         INSERT INTO landing_routes (
-          name, entry_domain, exit_domain, real_target_type, external_url, title, image_path, apk_url, auto_download,
+          name, entry_domain, exit_domain, real_target_type, external_url, landing_mode, landing_template_id, title, image_path, apk_url, auto_download,
           cloak_enabled, cloak_threshold, cloak_token_hours,
           cloak_decoy_title, cloak_decoy_image_path, cloak_decoy_apk_url,
           meta_enabled, meta_pixel_id, meta_capi_token, meta_test_event_code, meta_currency, meta_value,
           meta_page_view_enabled, meta_view_content_enabled, meta_lead_enabled, enabled
         ) VALUES (
-          @name, @entry_domain, NULLIF(@exit_domain, ''), @real_target_type, @external_url, @title, @image_path, @apk_url, @auto_download,
+          @name, @entry_domain, NULLIF(@exit_domain, ''), @real_target_type, @external_url, @landing_mode, @landing_template_id, @title, @image_path, @apk_url, @auto_download,
           @cloak_enabled, @cloak_threshold, @cloak_token_hours,
           @cloak_decoy_title, @cloak_decoy_image_path, @cloak_decoy_apk_url,
           @meta_enabled, @meta_pixel_id, @meta_capi_token, @meta_test_event_code, @meta_currency, @meta_value,
@@ -182,6 +196,8 @@ export async function POST(req: NextRequest) {
           exit_domain=NULLIF(@exit_domain, ''),
           real_target_type=@real_target_type,
           external_url=@external_url,
+          landing_mode=@landing_mode,
+          landing_template_id=@landing_template_id,
           title=@title,
           image_path=@image_path,
           apk_url=@apk_url,

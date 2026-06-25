@@ -8,8 +8,10 @@ import {
 } from "@/lib/db";
 import { getClientIp, recordVisitFast } from "@/lib/visit";
 import ExitLanding from "@/components/ExitLanding";
+import TemplateLanding from "@/components/TemplateLanding";
 import { getMetaBrowserConfig } from "@/lib/meta-config";
 import { buildMetaEventSourceUrl, sendMetaEvent } from "@/lib/meta";
+import { getLandingTemplateById } from "@/lib/landing-templates";
 import {
   classifyServerSync,
   routeCloakEnabled,
@@ -143,14 +145,32 @@ export default async function Page({
 
   if (exitRoute) {
     const promoRow = promo ? getPromoForRoute(exitRoute.id, promo) : null;
+    const apkUrl = promoRow?.apk_url || exitRoute.apk_url;
+    const effectivePromo = promoRow ? promoRow.code : promo;
+    const meta = getMetaBrowserConfig(exitRoute);
+    if (exitRoute.landing_mode === "template" && exitRoute.landing_template_id) {
+      const template = getLandingTemplateById(exitRoute.landing_template_id);
+      if (template) {
+        return (
+          <TemplateLanding
+            apkUrl={apkUrl}
+            autoDownload={exitRoute.auto_download === 1}
+            promo={effectivePromo}
+            templateUrl={`/landing-templates/${template.id}/${template.entry_file}`}
+            meta={meta}
+          />
+        );
+      }
+    }
+
     return (
       <ExitLanding
-        apkUrl={promoRow?.apk_url || exitRoute.apk_url}
+        apkUrl={apkUrl}
         imageUrl={normalizeUploadImagePath(exitRoute.image_path)}
         title={exitRoute.title || "下载"}
         autoDownload={exitRoute.auto_download === 1}
-        promo={promoRow ? promoRow.code : promo}
-        meta={getMetaBrowserConfig(exitRoute)}
+        promo={effectivePromo}
+        meta={meta}
       />
     );
   }

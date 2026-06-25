@@ -487,6 +487,38 @@
   gap: 12px;
 }
 
+.admin-link-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.admin-template-box {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-radius);
+  background: var(--admin-surface-muted);
+}
+
+.admin-template-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.admin-template-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid var(--admin-border);
+  border-radius: 6px;
+  background: #ffffff;
+}
+
 .admin-hint {
   margin: 6px 0 0;
   color: var(--admin-faint);

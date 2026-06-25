@@ -9,6 +9,9 @@ interface LandingRoute {
   exit_domain: string | null;
   real_target_type: "internal" | "external";
   external_url: string;
+  landing_mode: "default" | "template";
+  landing_template_id: number | null;
+  landing_template_name?: string;
   title: string;
   image_path: string;
   apk_url: string;
@@ -47,6 +50,15 @@ interface Promo {
   downloads: number;
 }
 
+interface LandingTemplate {
+  id: number;
+  name: string;
+  entry_file: string;
+  file_count: number;
+  size_bytes: number;
+  created_at: string;
+}
+
 type FormState = Omit<LandingRoute, "id" | "visits" | "downloads">;
 
 const blank: FormState = {
@@ -55,6 +67,8 @@ const blank: FormState = {
   exit_domain: "",
   real_target_type: "internal",
   external_url: "",
+  landing_mode: "default",
+  landing_template_id: null,
   title: "下载",
   image_path: "",
   apk_url: "",
@@ -79,6 +93,7 @@ const blank: FormState = {
 
 export default function RoutesPage() {
   const [rows, setRows] = useState<LandingRoute[]>([]);
+  const [templates, setTemplates] = useState<LandingTemplate[]>([]);
   const [form, setForm] = useState<FormState>(blank);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -88,6 +103,8 @@ export default function RoutesPage() {
   const [promoName, setPromoName] = useState("");
   const [promoApkUrl, setPromoApkUrl] = useState("");
   const [promoError, setPromoError] = useState("");
+  const [templateName, setTemplateName] = useState("");
+  const [templateError, setTemplateError] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -106,8 +123,15 @@ export default function RoutesPage() {
     if (d.ok) setRows(d.rows);
   }
 
+  async function loadTemplates() {
+    const res = await fetch("/api/admin/templates");
+    const d = await res.json();
+    if (d.ok) setTemplates(d.rows);
+  }
+
   useEffect(() => {
     load();
+    loadTemplates();
   }, []);
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
@@ -219,6 +243,43 @@ export default function RoutesPage() {
     else setError(d.error || "上传失败");
   }
 
+  async function uploadTemplate(file: File) {
+    setTemplateError("");
+    const body = new FormData();
+    body.append("action", "upload");
+    body.append("file", file);
+    body.append("name", templateName);
+    const res = await fetch("/api/admin/templates", { method: "POST", body });
+    const d = await res.json();
+    if (!d.ok) {
+      setTemplateError(d.error || "模板上传失败");
+      return;
+    }
+    setTemplateName("");
+    await loadTemplates();
+    set("landing_mode", "template");
+    set("landing_template_id", d.row.id);
+  }
+
+  async function deleteTemplate(id: number) {
+    setTemplateError("");
+    const body = new FormData();
+    body.append("action", "delete");
+    body.append("id", String(id));
+    const res = await fetch("/api/admin/templates", { method: "POST", body });
+    const d = await res.json();
+    if (!d.ok) {
+      setTemplateError(d.error || "模板删除失败");
+      return;
+    }
+    if (form.landing_template_id === id) {
+      set("landing_mode", "default");
+      set("landing_template_id", null);
+    }
+    loadTemplates();
+    load();
+  }
+
   return (
     <div>
       <div className="admin-page-header">
@@ -275,7 +336,18 @@ export default function RoutesPage() {
                   </td>
                   <td>{r.visits}</td>
                   <td>{r.downloads}</td>
-                  <td>{r.image_path ? <img src={r.image_path} alt="" className="admin-thumb" /> : "-"}</td>
+                  <td>
+                    {r.landing_mode === "template" ? (
+                      <div>
+                        <Badge variant="primary" label="模板" />
+                        <div className="admin-muted" style={{ marginTop: 4 }}>{r.landing_template_name || "-"}</div>
+                      </div>
+                    ) : r.image_path ? (
+                      <img src={r.image_path} alt="" className="admin-thumb" />
+                    ) : (
+                      <Badge variant="muted" label="默认" />
+                    )}
+                  </td>
                   <td>{r.cloak_enabled ? <Badge variant="primary" label="开启" /> : <Badge variant="muted" label="关闭" />}</td>
                   <td>
                     <div className="admin-btn-row">
@@ -361,6 +433,30 @@ export default function RoutesPage() {
             {form.real_target_type === "internal" && (
               <Section title="内部落地页">
                 <div className="admin-form-grid">
+                  <Field label="落地页类型">
+                    <select
+                      value={form.landing_mode}
+                      onChange={(e) => set("landing_mode", e.target.value as FormState["landing_mode"])}
+                      className="admin-input"
+                    >
+                      <option value="default">默认图片页面</option>
+                      <option value="template">自定义模板</option>
+                    </select>
+                  </Field>
+                  {form.landing_mode === "template" ? (
+                    <Field label="选择模板">
+                      <select
+                        value={form.landing_template_id || ""}
+                        onChange={(e) => set("landing_template_id", Number(e.target.value || 0) || null)}
+                        className="admin-input"
+                      >
+                        <option value="">请选择模板</option>
+                        {templates.map((tpl) => (
+                          <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
+                        ))}
+                      </select>
+                    </Field>
+                  ) : null}
                   <Field label="落地页标题">
                     <input value={form.title} onChange={(e) => set("title", e.target.value)} className="admin-input" />
                   </Field>
@@ -374,7 +470,18 @@ export default function RoutesPage() {
                     </select>
                   </Field>
                 </div>
-                <ImageUpload label="落地页图片" value={form.image_path} onPick={(file) => upload(file, "image_path")} onClear={() => set("image_path", "")} />
+                {form.landing_mode === "default" ? (
+                  <ImageUpload label="落地页图片" value={form.image_path} onPick={(file) => upload(file, "image_path")} onClear={() => set("image_path", "")} />
+                ) : (
+                  <TemplateManager
+                    templates={templates}
+                    templateName={templateName}
+                    templateError={templateError}
+                    onTemplateName={setTemplateName}
+                    onUpload={uploadTemplate}
+                    onDelete={deleteTemplate}
+                  />
+                )}
               </Section>
             )}
 
@@ -644,4 +751,81 @@ function ImageUpload({
       </div>
     </div>
   );
+}
+
+function TemplateManager({
+  templates,
+  templateName,
+  templateError,
+  onTemplateName,
+  onUpload,
+  onDelete,
+}: {
+  templates: LandingTemplate[];
+  templateName: string;
+  templateError: string;
+  onTemplateName: (value: string) => void;
+  onUpload: (file: File) => void;
+  onDelete: (id: number) => void;
+}) {
+  return (
+    <div className="admin-template-box">
+      <div className="admin-form-grid">
+        <Field label="模板名称">
+          <input
+            value={templateName}
+            onChange={(e) => onTemplateName(e.target.value)}
+            className="admin-input"
+            placeholder="例如 live-page-v1"
+          />
+        </Field>
+        <Field label="上传 ZIP 模板包">
+          <input
+            type="file"
+            accept=".zip,application/zip,application/x-zip-compressed"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) onUpload(file);
+              e.currentTarget.value = "";
+            }}
+          />
+        </Field>
+      </div>
+      <p className="admin-hint">
+        ZIP 必须包含 index.html。下载按钮加 data-action=&quot;download&quot;，或调用 window.LandingBridge.download()。
+      </p>
+      {templateError && <p className="admin-alert admin-alert-danger" style={{ marginTop: 10 }}>{templateError}</p>}
+      <div className="admin-template-list">
+        {templates.map((tpl) => (
+          <div key={tpl.id} className="admin-template-item">
+            <div>
+              <strong>{tpl.name}</strong>
+              <div className="admin-muted" style={{ marginTop: 4 }}>
+                {tpl.file_count} files / {formatBytes(tpl.size_bytes)}
+              </div>
+            </div>
+            <div className="admin-btn-row">
+              <a
+                href={`/landing-templates/${tpl.id}/${tpl.entry_file}`}
+                target="_blank"
+                rel="noreferrer"
+                className="admin-btn admin-link-btn"
+              >
+                预览
+              </a>
+              <button onClick={() => onDelete(tpl.id)} className="admin-btn admin-btn-danger">删除</button>
+            </div>
+          </div>
+        ))}
+        {templates.length === 0 && <div className="admin-empty">暂无模板</div>}
+      </div>
+    </div>
+  );
+}
+
+function formatBytes(value: number): string {
+  const bytes = Number(value || 0);
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 102.4) / 10} KB`;
+  return `${Math.round(bytes / 1024 / 102.4) / 10} MB`;
 }

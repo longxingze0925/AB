@@ -10,6 +10,8 @@ export interface LandingRoute {
   exit_domain: string | null;
   real_target_type: "internal" | "external";
   external_url: string;
+  landing_mode: "default" | "template";
+  landing_template_id: number | null;
   title: string;
   image_path: string;
   apk_url: string;
@@ -102,12 +104,29 @@ function migrateBeforeSchema(db: Database.Database) {
   if (hasTable(db, "promo_codes") && !hasColumn(db, "promo_codes", "route_id")) {
     db.exec("ALTER TABLE promo_codes ADD COLUMN route_id INTEGER");
   }
+  if (hasTable(db, "landing_templates")) {
+    if (!hasColumn(db, "landing_templates", "entry_file")) {
+      db.exec("ALTER TABLE landing_templates ADD COLUMN entry_file TEXT NOT NULL DEFAULT 'index.html'");
+    }
+    if (!hasColumn(db, "landing_templates", "file_count")) {
+      db.exec("ALTER TABLE landing_templates ADD COLUMN file_count INTEGER NOT NULL DEFAULT 0");
+    }
+    if (!hasColumn(db, "landing_templates", "size_bytes")) {
+      db.exec("ALTER TABLE landing_templates ADD COLUMN size_bytes INTEGER NOT NULL DEFAULT 0");
+    }
+  }
   if (hasTable(db, "landing_routes")) {
     if (!hasColumn(db, "landing_routes", "real_target_type")) {
       db.exec("ALTER TABLE landing_routes ADD COLUMN real_target_type TEXT DEFAULT 'internal'");
     }
     if (!hasColumn(db, "landing_routes", "external_url")) {
       db.exec("ALTER TABLE landing_routes ADD COLUMN external_url TEXT DEFAULT ''");
+    }
+    if (!hasColumn(db, "landing_routes", "landing_mode")) {
+      db.exec("ALTER TABLE landing_routes ADD COLUMN landing_mode TEXT NOT NULL DEFAULT 'default'");
+    }
+    if (!hasColumn(db, "landing_routes", "landing_template_id")) {
+      db.exec("ALTER TABLE landing_routes ADD COLUMN landing_template_id INTEGER");
     }
     ensureLandingRouteMetaColumns(db);
     if (columnIsNotNull(db, "landing_routes", "exit_domain")) {
@@ -137,11 +156,26 @@ function migrateAfterSchema(db: Database.Database) {
     db.exec("ALTER TABLE promo_codes ADD COLUMN route_id INTEGER");
   }
   db.exec("CREATE INDEX IF NOT EXISTS idx_promo_codes_route ON promo_codes(route_id)");
+  if (!hasColumn(db, "landing_templates", "entry_file")) {
+    db.exec("ALTER TABLE landing_templates ADD COLUMN entry_file TEXT NOT NULL DEFAULT 'index.html'");
+  }
+  if (!hasColumn(db, "landing_templates", "file_count")) {
+    db.exec("ALTER TABLE landing_templates ADD COLUMN file_count INTEGER NOT NULL DEFAULT 0");
+  }
+  if (!hasColumn(db, "landing_templates", "size_bytes")) {
+    db.exec("ALTER TABLE landing_templates ADD COLUMN size_bytes INTEGER NOT NULL DEFAULT 0");
+  }
   if (!hasColumn(db, "landing_routes", "real_target_type")) {
     db.exec("ALTER TABLE landing_routes ADD COLUMN real_target_type TEXT DEFAULT 'internal'");
   }
   if (!hasColumn(db, "landing_routes", "external_url")) {
     db.exec("ALTER TABLE landing_routes ADD COLUMN external_url TEXT DEFAULT ''");
+  }
+  if (!hasColumn(db, "landing_routes", "landing_mode")) {
+    db.exec("ALTER TABLE landing_routes ADD COLUMN landing_mode TEXT NOT NULL DEFAULT 'default'");
+  }
+  if (!hasColumn(db, "landing_routes", "landing_template_id")) {
+    db.exec("ALTER TABLE landing_routes ADD COLUMN landing_template_id INTEGER");
   }
   ensureLandingRouteMetaColumns(db);
   if (columnIsNotNull(db, "landing_routes", "exit_domain")) {
@@ -318,11 +352,11 @@ function ensureDefaultRouteFromLegacy(db: Database.Database) {
   const result = db.prepare(
     `
     INSERT OR IGNORE INTO landing_routes (
-      name, entry_domain, exit_domain, real_target_type, external_url, title, image_path, apk_url, auto_download,
+      name, entry_domain, exit_domain, real_target_type, external_url, landing_mode, landing_template_id, title, image_path, apk_url, auto_download,
       cloak_enabled, cloak_threshold, cloak_token_hours,
       cloak_decoy_title, cloak_decoy_image_path, cloak_decoy_apk_url, enabled
     ) VALUES (
-      @name, @entry_domain, @exit_domain, 'internal', '', @title, @image_path, @apk_url, @auto_download,
+      @name, @entry_domain, @exit_domain, 'internal', '', 'default', NULL, @title, @image_path, @apk_url, @auto_download,
       @cloak_enabled, @cloak_threshold, @cloak_token_hours,
       @cloak_decoy_title, @cloak_decoy_image_path, @cloak_decoy_apk_url, 1
     )
