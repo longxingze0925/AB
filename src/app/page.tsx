@@ -291,6 +291,7 @@ function routeDecoyResponse(route: LandingRoute, promo: string) {
       title={decoy.title}
       autoDownload={false}
       promo={promo}
+      trackDownload={false}
     />
   );
 }

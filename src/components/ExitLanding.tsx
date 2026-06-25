@@ -18,6 +18,7 @@ interface Props {
   title: string;
   autoDownload: boolean;
   promo: string;
+  trackDownload?: boolean;
   meta?: MetaBrowserConfig | null;
 }
 
@@ -92,7 +93,15 @@ function getMetaCookie(name: string): string {
   return part ? decodeURIComponent(part.slice(prefix.length)) : "";
 }
 
-export default function ExitLanding({ apkUrl, imageUrl, title, autoDownload, promo, meta }: Props) {
+export default function ExitLanding({
+  apkUrl,
+  imageUrl,
+  title,
+  autoDownload,
+  promo,
+  trackDownload = true,
+  meta,
+}: Props) {
   const started = useRef(false);
   const collected = useRef(false);
   const metaTracked = useRef(false);
@@ -107,6 +116,7 @@ export default function ExitLanding({ apkUrl, imageUrl, title, autoDownload, pro
   }, []);
 
   const markDownloaded = useCallback((visitId: number) => {
+    if (!trackDownload) return;
     if (!visitId) return;
     if (downloadMarked.current) return;
     downloadMarked.current = true;
@@ -121,14 +131,14 @@ export default function ExitLanding({ apkUrl, imageUrl, title, autoDownload, pro
         url: window.location.href,
       })], { type: "application/json" })
     );
-  }, []);
+  }, [trackDownload]);
 
   const triggerDownload = useCallback((countDownload = true) => {
     if (!apkUrl) return;
 
     const visitId = getVisitId();
     if (countDownload) {
-      if (visitId && meta?.leadEnabled) trackMetaEvent(meta, "Lead", `lead_${visitId}`);
+      if (trackDownload && visitId && meta?.leadEnabled) trackMetaEvent(meta, "Lead", `lead_${visitId}`);
       markDownloaded(visitId);
     }
 
@@ -146,7 +156,7 @@ export default function ExitLanding({ apkUrl, imageUrl, title, autoDownload, pro
       cleanupTimers.current = cleanupTimers.current.filter((item) => item !== timer);
     }, 15000);
     cleanupTimers.current.push(timer);
-  }, [apkUrl, getVisitId, markDownloaded, meta]);
+  }, [apkUrl, getVisitId, markDownloaded, meta, trackDownload]);
 
   useEffect(() => {
     if (collected.current) return;
