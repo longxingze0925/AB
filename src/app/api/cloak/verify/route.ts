@@ -10,7 +10,7 @@ import {
 import { getCloakThreshold, getCloakTokenHours, routeCloakThreshold, routeCloakTokenHours } from "@/lib/cloak";
 import { getClientIp, recordVisitFast } from "@/lib/visit";
 import { getPromoForRoute, getRouteById, type LandingRoute } from "@/lib/db";
-import { sendMetaEvent } from "@/lib/meta";
+import { buildMetaEventSourceUrl, sendMetaEvent } from "@/lib/meta";
 
 export const runtime = "nodejs";
 
@@ -237,7 +237,7 @@ export async function POST(req: NextRequest) {
         eventName: "ViewContent",
         eventId: `vc_${visitId}`,
         headers: req.headers,
-        eventSourceUrl: target,
+        eventSourceUrl: buildMetaEventSourceUrl(route, { promo: effectivePromo, fbclid }),
         fbclid,
       });
     }

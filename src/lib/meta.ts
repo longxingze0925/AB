@@ -33,8 +33,8 @@ export async function sendMetaEventForVisit(input: SendMetaVisitEventInput) {
   const route = getRouteById(visit.route_id);
   if (!route) return;
 
-  const eventSourceUrl =
-    input.eventSourceUrl || buildVisitSourceUrl(route, visit.exit_domain, input.visitId);
+  const fbclid = cleanMetaValue(input.fbclid) || getFbclidFromUrl(input.eventSourceUrl || "");
+  const eventSourceUrl = buildVisitSourceUrl(route, visit, fbclid);
 
   await sendMetaEvent({
     route,
@@ -44,8 +44,21 @@ export async function sendMetaEventForVisit(input: SendMetaVisitEventInput) {
     eventSourceUrl,
     fbp: input.fbp,
     fbc: input.fbc,
-    fbclid: input.fbclid,
+    fbclid,
   });
+}
+
+export function buildMetaEventSourceUrl(
+  route: LandingRoute,
+  input: { promo?: string; fbclid?: string } = {}
+): string {
+  const base = normalizeSourceBase(route.entry_domain || route.exit_domain || route.external_url || "");
+  const url = new URL(base);
+  const promo = cleanMetaValue(input.promo);
+  const fbclid = cleanMetaValue(input.fbclid);
+  if (promo) url.searchParams.set("c", promo);
+  if (fbclid) url.searchParams.set("fbclid", fbclid);
+  return url.toString();
 }
 
 export async function sendMetaEvent(input: SendMetaEventInput) {
@@ -149,10 +162,16 @@ function getCookie(headers: Headers, name: string): string {
   return decodeURIComponent(part.slice(prefix.length));
 }
 
-function buildVisitSourceUrl(route: LandingRoute, exitDomain: string, visitId: number): string {
-  if (route.real_target_type === "external") return route.external_url;
-  const domain = exitDomain || route.exit_domain || route.entry_domain;
-  const url = new URL(`https://${domain}/`);
-  if (visitId) url.searchParams.set("v", String(visitId));
-  return url.toString();
+function normalizeSourceBase(value: string): string {
+  const source = value.trim();
+  if (!source) return "https://localhost/";
+  if (/^https?:\/\//i.test(source)) return source;
+  return `https://${source}/`;
+}
+
+function buildVisitSourceUrl(route: LandingRoute, visit: { promo_code?: string }, fbclid: string): string {
+  return buildMetaEventSourceUrl(route, {
+    promo: visit.promo_code || "",
+    fbclid,
+  });
 }

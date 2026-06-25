@@ -9,7 +9,7 @@ import {
 import { getClientIp, recordVisitFast } from "@/lib/visit";
 import ExitLanding from "@/components/ExitLanding";
 import { getMetaBrowserConfig } from "@/lib/meta-config";
-import { sendMetaEvent } from "@/lib/meta";
+import { buildMetaEventSourceUrl, sendMetaEvent } from "@/lib/meta";
 import {
   classifyServerSync,
   routeCloakEnabled,
@@ -180,7 +180,7 @@ export default async function Page({
       eventName: "ViewContent",
       eventId: `vc_${visitId}`,
       headers: h,
-      eventSourceUrl: target.toString(),
+      eventSourceUrl: buildMetaEventSourceUrl(route, { promo: effectivePromo, fbclid }),
       fbclid,
     });
   }

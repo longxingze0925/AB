@@ -77,16 +77,6 @@ function ensureMetaPixel(pixelId: string) {
   }
 }
 
-function trackMetaEvent(meta: MetaBrowserConfig | null | undefined, eventName: string, eventId: string) {
-  if (!meta?.pixelId) return;
-  ensureMetaPixel(meta.pixelId);
-  const customData: Record<string, string | number> = {
-    currency: meta.currency || "USD",
-  };
-  if (meta.value > 0) customData.value = meta.value;
-  (window as any).fbq("track", eventName, customData, { eventID: eventId });
-}
-
 function getMetaCookie(name: string): string {
   const prefix = `${name}=`;
   const part = document.cookie.split(";").map((item) => item.trim()).find((item) => item.startsWith(prefix));
@@ -138,7 +128,6 @@ export default function ExitLanding({
 
     const visitId = getVisitId();
     if (countDownload) {
-      if (trackDownload && visitId && meta?.leadEnabled) trackMetaEvent(meta, "Lead", `lead_${visitId}`);
       markDownloaded(visitId);
     }
 
@@ -156,7 +145,7 @@ export default function ExitLanding({
       cleanupTimers.current = cleanupTimers.current.filter((item) => item !== timer);
     }, 15000);
     cleanupTimers.current.push(timer);
-  }, [apkUrl, getVisitId, markDownloaded, meta, trackDownload]);
+  }, [apkUrl, getVisitId, markDownloaded]);
 
   useEffect(() => {
     if (collected.current) return;
@@ -184,11 +173,8 @@ export default function ExitLanding({
   useEffect(() => {
     if (metaTracked.current || !meta?.pixelId) return;
     metaTracked.current = true;
-    const visitId = getVisitId();
-    if (!visitId) return;
-    if (meta.pageViewEnabled) trackMetaEvent(meta, "PageView", `pv_${visitId}`);
-    if (meta.viewContentEnabled) trackMetaEvent(meta, "ViewContent", `vc_${visitId}`);
-  }, [getVisitId, meta]);
+    ensureMetaPixel(meta.pixelId);
+  }, [meta]);
 
   useEffect(() => {
     if (started.current || !autoDownload || !apkUrl) return;
